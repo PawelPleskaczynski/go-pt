@@ -64,7 +64,7 @@ func SaveImage(canvas []Color, width, height, maxValue int, fileName string, ext
 			image := image.NewRGBA(image.Rect(0, 0, width, height))
 			for y := height - 1; y >= 0; y-- {
 				for x := 0; x < width; x++ {
-					image.SetRGBA(x, width-1-y, color.RGBA{uint8(math.Sqrt(canvas[y*width+x].r) * 255.9), uint8(math.Sqrt(canvas[y*width+x].g) * 255.9), uint8(math.Sqrt(canvas[y*width+x].b) * 255.9), 255})
+					image.SetRGBA(x, height-1-y, color.RGBA{uint8(math.Sqrt(canvas[y*width+x].r) * 255.9), uint8(math.Sqrt(canvas[y*width+x].g) * 255.9), uint8(math.Sqrt(canvas[y*width+x].b) * 255.9), 255})
 				}
 			}
 			png.Encode(f, image)
@@ -72,7 +72,7 @@ func SaveImage(canvas []Color, width, height, maxValue int, fileName string, ext
 			image := image.NewRGBA64(image.Rect(0, 0, width, height))
 			for y := height - 1; y >= 0; y-- {
 				for x := 0; x < width; x++ {
-					image.SetRGBA64(x, width-1-y, color.RGBA64{uint16(math.Sqrt(canvas[y*width+x].r) * 65535.9), uint16(math.Sqrt(canvas[y*width+x].g) * 65535.9), uint16(math.Sqrt(canvas[y*width+x].b) * 65535.9), 65535})
+					image.SetRGBA64(x, height-1-y, color.RGBA64{uint16(math.Sqrt(canvas[y*width+x].r) * 65535.9), uint16(math.Sqrt(canvas[y*width+x].g) * 65535.9), uint16(math.Sqrt(canvas[y*width+x].b) * 65535.9), 65535})
 				}
 			}
 			png.Encode(f, image)
