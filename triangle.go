@@ -6,6 +6,8 @@ type TrianglePosition struct {
 
 type Triangle struct {
 	position TrianglePosition
+	vnormals TrianglePosition
 	material Material
 	normal   Tuple
+	smooth   bool
 }

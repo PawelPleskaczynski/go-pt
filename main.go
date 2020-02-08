@@ -43,11 +43,11 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 	}
 }
 
-func loadOBJ(file *os.File, list *[]Triangle, material Material) {
+func loadOBJ(file *os.File, list *[]Triangle, material Material, smooth bool) {
 	vertices := []Tuple{}
 	vertNormals := []Tuple{}
-	faceVerts := [][3]Tuple{}
-	faceNormals := [][3]Tuple{}
+	faceVerts := []TrianglePosition{}
+	faceNormals := []TrianglePosition{}
 
 	defer file.Close()
 	scanner := bufio.NewScanner(file)
@@ -81,11 +81,11 @@ func loadOBJ(file *os.File, list *[]Triangle, material Material) {
 				vn2, _ := strconv.Atoi(values2[2])
 				vn3, _ := strconv.Atoi(values3[2])
 
-				faceVerts = append(faceVerts, [3]Tuple{
+				faceVerts = append(faceVerts, TrianglePosition{
 					vertices[v1-1], vertices[v2-1], vertices[v3-1],
 				})
 
-				faceNormals = append(faceNormals, [3]Tuple{
+				faceNormals = append(faceNormals, TrianglePosition{
 					vertNormals[vn1-1], vertNormals[vn2-1], vertNormals[vn3-1],
 				})
 			}
@@ -94,17 +94,15 @@ func loadOBJ(file *os.File, list *[]Triangle, material Material) {
 
 	for i := 0; i < len(faceVerts); i++ {
 		triangle := Triangle{
-			TrianglePosition{
-				faceVerts[i][0],
-				faceVerts[i][1],
-				faceVerts[i][2],
-			},
+			faceVerts[i],
+			faceNormals[i],
 			material,
 			Tuple{0, 0, 0, 0},
+			smooth,
 		}
-		vertex0 := faceNormals[i][0]
-		vertex1 := faceNormals[i][1]
-		vertex2 := faceNormals[i][2]
+		vertex0 := faceNormals[i].vertex0
+		vertex1 := faceNormals[i].vertex1
+		vertex2 := faceNormals[i].vertex2
 		triangle.normal = (vertex0.Add(vertex1).Add(vertex2)).Normalize()
 		*list = append(*list, triangle)
 	}
@@ -246,14 +244,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	loadOBJ(file, &listTriangles, Material{Emission, Color{5, 5, 5}, 0, 1.45, 0, false})
+	loadOBJ(file, &listTriangles, Material{Emission, Color{5, 5, 5}, 0, 1.45, 0, false}, false)
 
 	file, err = os.Open("dragon.obj")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	loadOBJ(file, &listTriangles, Material{Plastic, Color{0.482, 0.858, 0.52}, 0, 1.5, 0.5, false})
+	loadOBJ(file, &listTriangles, Material{Plastic, Color{0.482, 0.858, 0.52}, 0, 1.5, 0.5, false}, true)
 
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{-0.75, 0.25, 0, 0}, 0.25,
@@ -263,21 +261,6 @@ func main() {
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{-0.75, 0.25, -0.55, 0}, 0.25,
 		Material{Plastic, Color{1, 1, 1}, 0, 1.45, 0.5, false},
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-0.75, 0.25, 0.55, 0}, 0.25,
-		Material{Metal, Color{1, 1, 1}, 0, 1.45, 0, false},
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0.19054, 1.0445, -0.44794, 0}, 0.098,
-		Material{Emission, Color{1, 0.833, 0.259}.MulScalar(5), 0, 1.45, 0, false},
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-0.6, 1.33, -0.6, 0}, 0.098,
-		Material{Emission, Color{1, 0.833, 0.259}.MulScalar(5), 0, 1.45, 0, false},
 	})
 
 	log.Println("Building BVHs...")

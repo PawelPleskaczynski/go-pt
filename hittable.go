@@ -141,9 +141,14 @@ func (tri *Triangle) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 		*&rec.p = r.origin.Add(r.direction.MulScalar(t))
 		*&rec.t = t
 		*&rec.material = tri.material
-		// *&rec.normal = Tuple{0, 1, 0, 1}
-		// *&rec.normal = edge1.Cross(edge2)
-		*&rec.normal = tri.normal
+		if tri.smooth {
+			vn1 := tri.vnormals.vertex0
+			vn2 := tri.vnormals.vertex1
+			vn3 := tri.vnormals.vertex2
+			*&rec.normal = vn2.MulScalar(u).Add(vn3.MulScalar(v)).Add(vn1.MulScalar(1 - u - v))
+		} else {
+			*&rec.normal = tri.normal
+		}
 		return true
 	}
 	return false
