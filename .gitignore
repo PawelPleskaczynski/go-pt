@@ -2,3 +2,4 @@
 *.ppm
 *.obj
 test/
+!images/*.png
