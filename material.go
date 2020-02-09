@@ -1,7 +1,6 @@
 package main
 
 import (
-	"math"
 	"math/rand"
 )
 
@@ -15,7 +14,7 @@ const (
 
 type Material struct {
 	material    int
-	albedo      Color
+	albedo      Texture
 	roughness   float64
 	ior         float64
 	specularity float64
@@ -26,20 +25,12 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 	if m.material == Lambertian {
 		target := rec.p.Add(rec.normal).Add(RandInUnitSphere(generator))
 		*scattered = Ray{rec.p, target.Subtract(rec.p)}
-		if m.checkered {
-			if (int(math.Floor(rec.p.x/0.5))+int(math.Floor(rec.p.y/0.5))+int(math.Floor(rec.p.z/0.5)))%2 == 0 {
-				*attenuation = Color{0.7, 0.7, 0.7}
-			} else {
-				*attenuation = m.albedo
-			}
-		} else {
-			*attenuation = m.albedo
-		}
+		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
 		return true
 	} else if m.material == Metal {
 		reflected := (r.direction.Normalize()).Reflection(rec.normal)
 		*scattered = Ray{rec.p, reflected.Add(RandInUnitSphere(generator).MulScalar(m.roughness))}
-		*attenuation = m.albedo
+		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
 		return (scattered.direction.Dot(rec.normal) > 0)
 	} else if m.material == Dielectric {
 		var outwardNormal Tuple
@@ -49,7 +40,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		var reflectProbability float64
 		var cosine float64
 
-		*attenuation = m.albedo
+		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
 		reflected := r.direction.Reflection(rec.normal)
 
 		if r.direction.Dot(rec.normal) > 0 {
@@ -89,7 +80,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		var reflectProbability float64
 		var cosine float64
 
-		*attenuation = m.albedo
+		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
 		reflected := r.direction.Reflection(rec.normal)
 
 		if r.direction.Dot(rec.normal) > 0 {

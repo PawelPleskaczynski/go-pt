@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"image"
 	"log"
 	"math"
 	"math/rand"
@@ -15,9 +16,9 @@ import (
 )
 
 const (
-	hsize   = 1500
-	vsize   = 1500
-	samples = 8192
+	hsize   = 480
+	vsize   = 480
+	samples = 4096
 	depth   = 8
 )
 
@@ -28,7 +29,7 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 		var scattered Ray
 		if d < depth && rec.material.Scatter(r, rec, &attenuation, &scattered, generator) {
 			if rec.material.material == Emission {
-				return rec.material.albedo
+				return rec.material.albedo.color(0, 0, rec.p)
 			} else {
 				return attenuation.Mul(colorize(scattered, world, d+1, generator))
 			}
@@ -230,12 +231,31 @@ func getBVH(triangles []Triangle, depth, x int) *BVH {
 	}
 }
 
+func loadTexture(texture image.Image) [][]Color {
+	width := texture.Bounds().Dx()
+	height := texture.Bounds().Dy()
+	array := make([][]Color, width)
+	for i := 0; i < width; i++ {
+		array[i] = make([]Color, height)
+	}
+
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			r, g, b, _ := texture.At(x, y).RGBA()
+			array[x][y] = Color{float64(r>>8) / 255, float64(g>>8) / 255, float64(b>>8) / 255}
+		}
+	}
+
+	// fmt.Printf("%v\n", array[0])
+	return array
+}
+
 func main() {
 	listSpheres := []Sphere{}
 	listTriangles := []Triangle{}
 
-	cameraPosition := Tuple{-2, 0.8, 0, 0}
-	cameraDirection := Tuple{0, 0.5, 0, 0}
+	cameraPosition := Tuple{1.4, 1, 2, 0}
+	cameraDirection := Tuple{-0.3, 0.7, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 80, float64(hsize)/float64(vsize), 0.0, focusDistance)
 
@@ -243,34 +263,22 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	loadOBJ(file, &listTriangles, Material{Emission, getConstant(Color{5, 5, 5}), 0, 1.45, 0, false}, false)
 
-	loadOBJ(file, &listTriangles, Material{Emission, Color{5, 5, 5}, 0, 1.45, 0, false}, false)
-
-	file, err = os.Open("dragon.obj")
+	file, err = os.Open("bunny.obj")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	loadOBJ(file, &listTriangles, Material{Plastic, Color{0.482, 0.858, 0.52}, 0, 1.5, 0.5, false}, true)
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-0.75, 0.25, 0, 0}, 0.25,
-		Material{Dielectric, Color{1, 1, 1}, 0, 1.45, 0.5, false},
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-0.75, 0.25, -0.55, 0}, 0.25,
-		Material{Plastic, Color{1, 1, 1}, 0, 1.45, 0.5, false},
-	})
+	loadOBJ(file, &listTriangles, Material{Dielectric, getCheckerboard(Color{1, 0, 0}, Color{0.25, 0, 0}, 0.1, 0.1, 0.1), 0, 1.45, 0.5, false}, true)
 
 	log.Println("Building BVHs...")
-	bvh := getBVH(listTriangles, 12, 0)
+	bvh := getBVH(listTriangles, 10, 0)
 	log.Println("Built BVHs")
 
 	// BOTTOM
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{0, -10000, 0, 0}, 10000,
-		Material{Lambertian, Color{1, 1, 1}, 0, 1.45, 0, false},
+		Material{Lambertian, getConstant(Color{1, 1, 1}), 0, 1.45, 0, false},
 	})
 
 	world := HittableList{listSpheres, *bvh}

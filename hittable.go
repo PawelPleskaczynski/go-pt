@@ -5,7 +5,7 @@ import (
 )
 
 type HitRecord struct {
-	t        float64
+	u, v, t  float64
 	p        Tuple
 	normal   Tuple
 	material Material
@@ -87,6 +87,23 @@ func (h *HittableList) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 	return hitAnything
 }
 
+// func (s Sphere) uv(p Tuple) (float64, float64) {
+// 	phi := math.Atan2(p.z, p.x)
+// 	theta := math.Asin(p.y)
+// 	fmt.Printf("%v\n", theta)
+// 	u := 1 - (phi+math.Pi)/(2*math.Pi)
+// 	v := (theta + math.Pi/2) / math.Pi
+// 	return u, v
+// }
+
+func (s Sphere) uv(p Tuple) (float64, float64) {
+	d := s.origin.Subtract(p).Normalize()
+	u := 0.5 - (math.Atan2(d.z, d.x))/(2*math.Pi)
+	v := 0.5 + (math.Asin(d.y))/(math.Pi)
+	// fmt.Printf("%v %v\n", u, v)
+	return u, v
+}
+
 func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 	oc := r.origin.Subtract(s.origin)
 	a := r.direction.Dot(r.direction)
@@ -98,7 +115,10 @@ func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 		if temp < tMax && temp > tMin {
 			*&rec.t = temp
 			*&rec.p = r.Position(rec.t)
-			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius)
+			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius).Normalize()
+			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == ImageUV {
+				*&rec.u, *&rec.v = s.uv(*&rec.p)
+			}
 			*&rec.material = s.material
 			return true
 		}
@@ -106,7 +126,10 @@ func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 		if temp < tMax && temp > tMin {
 			*&rec.t = temp
 			*&rec.p = r.Position(rec.t)
-			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius)
+			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius).Normalize()
+			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == ImageUV {
+				*&rec.u, *&rec.v = s.uv(*&rec.p)
+			}
 			*&rec.material = s.material
 			return true
 		}
@@ -141,6 +164,8 @@ func (tri *Triangle) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 		*&rec.p = r.origin.Add(r.direction.MulScalar(t))
 		*&rec.t = t
 		*&rec.material = tri.material
+		*&rec.u = u
+		*&rec.v = v
 		if tri.smooth {
 			vn1 := tri.vnormals.vertex0
 			vn2 := tri.vnormals.vertex1
