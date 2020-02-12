@@ -29,3 +29,7 @@ func (c Color) DivScalar(s float64) Color {
 func (c Color) Mul(c1 Color) Color {
 	return Color{c.r * c1.r, c.g * c1.g, c.b * c1.b}
 }
+
+func Hex(c int) Color {
+	return Color{float64(c>>16&0xff) / 255, float64(c>>8&0xff) / 255, float64(c&0xff) / 255}
+}

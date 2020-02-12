@@ -18,7 +18,7 @@ import (
 const (
 	hsize   = 480
 	vsize   = 480
-	samples = 4096
+	samples = 128
 	depth   = 8
 )
 
@@ -37,10 +37,10 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 			return Color{0, 0, 0}
 		}
 	} else {
-		// unit_direction := r.direction.Normalize()
-		// t := 0.5 * (unit_direction.y + 1.0)
-		// return Color{1.0, 1.0, 1.0}.MulScalar(1.0 - t).Add(Color{0.5, 0.7, 1.0}.MulScalar(t))
-		return Color{0, 0, 0}
+		unit_direction := r.direction.Normalize()
+		t := 0.5 * (unit_direction.y + 1.0)
+		return Color{1.0, 1.0, 1.0}.MulScalar(1.0 - t).Add(Color{0.5, 0.7, 1.0}.MulScalar(t))
+		// return Color{0, 0, 0}
 	}
 }
 
@@ -81,6 +81,24 @@ func loadOBJ(file *os.File, list *[]Triangle, material Material, smooth bool) {
 				vn1, _ := strconv.Atoi(values1[2])
 				vn2, _ := strconv.Atoi(values2[2])
 				vn3, _ := strconv.Atoi(values3[2])
+				if v1 < 0 {
+					v1 = len(vertices) + v1 + 1
+				}
+				if v2 < 0 {
+					v2 = len(vertices) + v2 + 1
+				}
+				if v3 < 0 {
+					v3 = len(vertices) + v3 + 1
+				}
+				if vn1 < 0 {
+					vn1 = len(vertNormals) + vn1 + 1
+				}
+				if vn2 < 0 {
+					vn2 = len(vertNormals) + vn2 + 1
+				}
+				if vn3 < 0 {
+					vn3 = len(vertNormals) + vn3 + 1
+				}
 
 				faceVerts = append(faceVerts, TrianglePosition{
 					vertices[v1-1], vertices[v2-1], vertices[v3-1],
@@ -246,7 +264,6 @@ func loadTexture(texture image.Image) [][]Color {
 		}
 	}
 
-	// fmt.Printf("%v\n", array[0])
 	return array
 }
 
@@ -254,31 +271,31 @@ func main() {
 	listSpheres := []Sphere{}
 	listTriangles := []Triangle{}
 
-	cameraPosition := Tuple{1.4, 1, 2, 0}
-	cameraDirection := Tuple{-0.3, 0.7, 0, 0}
+	cameraPosition := Tuple{1, 1.25, -2.5, 0}
+	cameraDirection := Tuple{0, 1.25, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 80, float64(hsize)/float64(vsize), 0.0, focusDistance)
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 80, float64(hsize)/float64(vsize), 0.05, focusDistance)
 
 	file, err := os.Open("light.obj")
 	if err != nil {
 		log.Fatal(err)
 	}
-	loadOBJ(file, &listTriangles, Material{Emission, getConstant(Color{5, 5, 5}), 0, 1.45, 0, false}, false)
+	loadOBJ(file, &listTriangles, getEmission(getConstant(Color{10, 10, 10})), false)
 
-	file, err = os.Open("bunny.obj")
+	file, err = os.Open("buddha.obj")
 	if err != nil {
 		log.Fatal(err)
 	}
-	loadOBJ(file, &listTriangles, Material{Dielectric, getCheckerboard(Color{1, 0, 0}, Color{0.25, 0, 0}, 0.1, 0.1, 0.1), 0, 1.45, 0.5, false}, true)
+	loadOBJ(file, &listTriangles, getMetal(getConstant(Hex(0xdbaf51)), 0), true)
 
 	log.Println("Building BVHs...")
-	bvh := getBVH(listTriangles, 10, 0)
+	bvh := getBVH(listTriangles, 15, 0)
 	log.Println("Built BVHs")
 
 	// BOTTOM
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{0, -10000, 0, 0}, 10000,
-		Material{Lambertian, getConstant(Color{1, 1, 1}), 0, 1.45, 0, false},
+		Material{Lambertian, getCheckerboard(Color{1, 1, 1}, Color{0.5, 0.5, 0.5}, 1, 1, 1), 0, 1.45, 0, 0, 0},
 	})
 
 	world := HittableList{listSpheres, *bvh}
