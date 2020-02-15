@@ -139,14 +139,13 @@ func (v Tuple) Reflection(n Tuple) Tuple {
 }
 
 func (v Tuple) Refraction(n Tuple, niOverNt float64, refracted *Tuple) bool {
-	uv := v.Normalize()
-	dt := uv.Dot(n)
-	discriminant := 1.0 - niOverNt*niOverNt*(1.0-dt*dt)
-	if discriminant > 0 {
-		*refracted = (uv.Subtract(n.MulScalar(dt))).MulScalar(niOverNt).Subtract(n).MulScalar(math.Sqrt(discriminant))
-		return true
+	dt := -n.Dot(v)
+	discriminant := niOverNt * niOverNt * (1.0 - dt*dt)
+	if discriminant > 1 {
+		return false
 	}
-	return false
+	*refracted = v.MulScalar(niOverNt).Add(n.MulScalar(niOverNt*dt - math.Sqrt(1-discriminant)))
+	return true
 }
 
 func Schlick(cos, ior float64) float64 {

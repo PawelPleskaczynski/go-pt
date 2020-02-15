@@ -39,13 +39,14 @@ func getEmission(albedo Texture) Material {
 }
 
 func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *Ray, generator rand.Rand) bool {
+	incoming := r.direction.Normalize()
 	if m.material == Lambertian {
 		target := rec.p.Add(rec.normal).Add(RandInUnitSphere(generator))
 		*scattered = Ray{rec.p, target.Subtract(rec.p)}
 		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
 		return true
 	} else if m.material == Metal {
-		reflected := (r.direction.Normalize()).Reflection(rec.normal)
+		reflected := incoming.Reflection(rec.normal)
 		*scattered = Ray{rec.p, reflected.Add(RandInUnitSphere(generator).MulScalar(m.roughness))}
 		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
 		return (scattered.direction.Dot(rec.normal) > 0)
@@ -58,19 +59,19 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		var cosine float64
 
 		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
-		reflected := r.direction.Reflection(rec.normal)
+		reflected := incoming.Reflection(rec.normal)
 
-		if r.direction.Dot(rec.normal) > 0 {
+		if incoming.Dot(rec.normal) > 0 {
 			outwardNormal = rec.normal.MulScalar(-1)
 			niOverNt = m.ior
-			cosine = m.ior * r.direction.Dot(rec.normal) / r.direction.Magnitude()
+			cosine = m.ior * incoming.Dot(rec.normal) / incoming.Magnitude()
 		} else {
 			outwardNormal = rec.normal
 			niOverNt = 1.0 / m.ior
-			cosine = -(r.direction.Dot(rec.normal) / r.direction.Magnitude())
+			cosine = -(incoming.Dot(rec.normal) / incoming.Magnitude())
 		}
 
-		if r.direction.Refraction(outwardNormal, niOverNt, &refracted) {
+		if incoming.Refraction(outwardNormal, niOverNt, &refracted) {
 			reflectProbability = Schlick(cosine, m.ior) + m.specularity/2
 			if reflectProbability > 1.0 {
 				reflectProbability = 1.0
@@ -98,7 +99,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		var cosine float64
 
 		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
-		reflected := r.direction.Reflection(rec.normal)
+		reflected := incoming.Reflection(rec.normal)
 
 		if RandFloat(generator) < m.metalicity {
 			*scattered = Ray{rec.p, reflected.Add(RandInUnitSphere(generator).MulScalar(m.roughness))}
@@ -106,17 +107,17 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		}
 
 		if RandFloat(generator) < m.transmission {
-			if r.direction.Dot(rec.normal) > 0 {
+			if incoming.Dot(rec.normal) > 0 {
 				outwardNormal = rec.normal.MulScalar(-1)
 				niOverNt = m.ior
-				cosine = m.ior * r.direction.Dot(rec.normal) / r.direction.Magnitude()
+				cosine = m.ior * incoming.Dot(rec.normal) / incoming.Magnitude()
 			} else {
 				outwardNormal = rec.normal
 				niOverNt = 1.0 / m.ior
-				cosine = -(r.direction.Dot(rec.normal) / r.direction.Magnitude())
+				cosine = -(incoming.Dot(rec.normal) / incoming.Magnitude())
 			}
 
-			if r.direction.Refraction(outwardNormal, niOverNt, &refracted) {
+			if incoming.Refraction(outwardNormal, niOverNt, &refracted) {
 				reflectProbability = Schlick(cosine, m.ior) + m.specularity/2
 				if reflectProbability > 1.0 {
 					reflectProbability = 1.0
@@ -135,17 +136,17 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 			return true
 		}
 
-		if r.direction.Dot(rec.normal) > 0 {
+		if incoming.Dot(rec.normal) > 0 {
 			outwardNormal = rec.normal.MulScalar(-1)
 			niOverNt = m.ior
-			cosine = 1 * r.direction.Dot(rec.normal) / r.direction.Magnitude()
+			cosine = 1 * incoming.Dot(rec.normal) / incoming.Magnitude()
 		} else {
 			outwardNormal = rec.normal
 			niOverNt = 1.0 / m.ior
-			cosine = -(r.direction.Dot(rec.normal) / r.direction.Magnitude())
+			cosine = -(incoming.Dot(rec.normal) / incoming.Magnitude())
 		}
 
-		if r.direction.Refraction(outwardNormal, niOverNt, &refracted) {
+		if incoming.Refraction(outwardNormal, niOverNt, &refracted) {
 			reflectProbability = Schlick(cosine, m.ior) + m.specularity/2
 			if reflectProbability > 1.0 {
 				reflectProbability = 1.0
