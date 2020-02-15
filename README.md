@@ -9,22 +9,16 @@ This scene consists of 871308 triangles and 6 spheres. It was rendered at 1500x1
 - Parallel processing on multiple CPU cores
 - BVH trees for optimized ray-triangle intersection tests
 - Positionable camera with adjustable field of view and aperture
-- 5 materials with adjustable properties (I will merge them into one BSDF):
-    - Lambertian
-        - color
-    - Plastic
-        - color
-        - specularity
-        - roughness
-    - Metal
-        - color
-        - roughness
-    - Dielectric
-        - color
-        - specularity
-        - roughness
+- Materials:
+    - BSDF material with adjustable properties:
+        - albedo:
+            - texture or color
+        - roughness:
         - index of refraction
-    - Emission
+        - specularity
+        - metalicity
+        - transmission
+    - Emission material:
         - emission color
 - Partial support for OBJ files (the program can parse triangles and their normals, but for now there's no support for textures or different materials for different parts of the model)
 - Normal smoothing
