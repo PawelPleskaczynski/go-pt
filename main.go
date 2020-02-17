@@ -125,57 +125,60 @@ func loadOBJ(file *os.File, list *[]Triangle, material Material, smooth bool) {
 					x, y, z, 0,
 				})
 			} else if text[0] == "f" {
-				values1 := strings.Split(text[1], "/")
-				values2 := strings.Split(text[2], "/")
-				values3 := strings.Split(text[3], "/")
+				vertCount := len(text) - 1
+				for i := 0; i < vertCount-1; i++ {
+					values1 := strings.Split(text[1], "/")
+					values2 := strings.Split(text[i+1], "/")
+					values3 := strings.Split(text[i+2], "/")
 
-				v1, _ := strconv.Atoi(values1[0])
-				v2, _ := strconv.Atoi(values2[0])
-				v3, _ := strconv.Atoi(values3[0])
+					v1, _ := strconv.Atoi(values1[0])
+					v2, _ := strconv.Atoi(values2[0])
+					v3, _ := strconv.Atoi(values3[0])
 
-				vn1, _ := strconv.Atoi(values1[2])
-				vn2, _ := strconv.Atoi(values2[2])
-				vn3, _ := strconv.Atoi(values3[2])
-				if v1 < 0 {
-					v1 = len(vertices) + v1 + 1
-				}
-				if v2 < 0 {
-					v2 = len(vertices) + v2 + 1
-				}
-				if v3 < 0 {
-					v3 = len(vertices) + v3 + 1
-				}
-				if vn1 < 0 {
-					vn1 = len(vertNormals) + vn1 + 1
-				}
-				if vn2 < 0 {
-					vn2 = len(vertNormals) + vn2 + 1
-				}
-				if vn3 < 0 {
-					vn3 = len(vertNormals) + vn3 + 1
-				}
+					vn1, _ := strconv.Atoi(values1[2])
+					vn2, _ := strconv.Atoi(values2[2])
+					vn3, _ := strconv.Atoi(values3[2])
+					if v1 < 0 {
+						v1 = len(vertices) + v1 + 1
+					}
+					if v2 < 0 {
+						v2 = len(vertices) + v2 + 1
+					}
+					if v3 < 0 {
+						v3 = len(vertices) + v3 + 1
+					}
+					if vn1 < 0 {
+						vn1 = len(vertNormals) + vn1 + 1
+					}
+					if vn2 < 0 {
+						vn2 = len(vertNormals) + vn2 + 1
+					}
+					if vn3 < 0 {
+						vn3 = len(vertNormals) + vn3 + 1
+					}
 
-				faceVerts = append(faceVerts, TrianglePosition{
-					vertices[v1-1], vertices[v2-1], vertices[v3-1],
-				})
+					faceVerts = append(faceVerts, TrianglePosition{
+						vertices[v1-1], vertices[v2-1], vertices[v3-1],
+					})
 
-				faceNormals = append(faceNormals, TrianglePosition{
-					vertNormals[vn1-1], vertNormals[vn2-1], vertNormals[vn3-1],
-				})
+					faceNormals = append(faceNormals, TrianglePosition{
+						vertNormals[vn1-1], vertNormals[vn2-1], vertNormals[vn3-1],
+					})
 
-				triangle := Triangle{
-					faceVerts[f],
-					faceNormals[f],
-					material,
-					Tuple{0, 0, 0, 0},
-					smooth,
+					triangle := Triangle{
+						faceVerts[f],
+						faceNormals[f],
+						material,
+						Tuple{0, 0, 0, 0},
+						smooth,
+					}
+					vertex0 := faceNormals[f].vertex0
+					vertex1 := faceNormals[f].vertex1
+					vertex2 := faceNormals[f].vertex2
+					triangle.normal = (vertex0.Add(vertex1).Add(vertex2)).Normalize()
+					*list = append(*list, triangle)
+					f++
 				}
-				vertex0 := faceNormals[f].vertex0
-				vertex1 := faceNormals[f].vertex1
-				vertex2 := faceNormals[f].vertex2
-				triangle.normal = (vertex0.Add(vertex1).Add(vertex2)).Normalize()
-				*list = append(*list, triangle)
-				f++
 			}
 		}
 	}
@@ -325,8 +328,8 @@ func main() {
 	listSpheres := []Sphere{}
 	listTriangles := []Triangle{}
 
-	cameraPosition := Tuple{2, 1, 1, 0}
-	cameraDirection := Tuple{0, 0.66, 0, 0}
+	cameraPosition := Tuple{3, 1, 1, 0}
+	cameraDirection := Tuple{0, 0.75, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 50, float64(hsize)/float64(vsize), 0.01, focusDistance)
 
