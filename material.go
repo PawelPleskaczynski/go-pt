@@ -5,11 +5,11 @@ import (
 )
 
 const (
-	Metal = iota
+	BSDF = iota
 	Lambertian
+	Metal
 	Dielectric
 	Emission
-	BSDF
 )
 
 type Material struct {
@@ -20,6 +20,10 @@ type Material struct {
 	specularity  float64
 	metalicity   float64
 	transmission float64
+}
+
+func getLambertian(albedo Texture) Material {
+	return Material{Lambertian, albedo, 0, 1.5, 0, 0, 0}
 }
 
 func getDiffuse(albedo Texture, roughness, specularity float64) Material {

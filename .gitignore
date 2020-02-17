@@ -1,5 +1,6 @@
 *.png
 *.ppm
 *.obj
+*.mtl
 test/
 !images/*.png

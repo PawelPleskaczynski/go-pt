@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"image"
+	"io"
 	"log"
 	"math"
 	"math/rand"
@@ -18,7 +19,7 @@ import (
 const (
 	hsize   = 480
 	vsize   = 480
-	samples = 128
+	samples = 32
 	depth   = 8
 )
 
@@ -44,17 +45,71 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 	}
 }
 
+func loadMaterial(file *os.File, name string) Material {
+	material := Material{material: Lambertian}
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		text := strings.Fields(scanner.Text())
+		if len(text) > 0 {
+			if text[0] == "newmtl" && text[1] == name {
+				for scanner.Scan() {
+					text = strings.Fields(scanner.Text())
+					if len(text) > 0 {
+						if text[0] == "newmtl" {
+							break
+						}
+						if text[0] == "Kd" {
+							r, _ := strconv.ParseFloat(text[1], 64)
+							g, _ := strconv.ParseFloat(text[2], 64)
+							b, _ := strconv.ParseFloat(text[3], 64)
+							material.albedo = getConstant(Color{r, g, b})
+						}
+						if text[0] == "Ns" {
+							specularity, _ := strconv.ParseFloat(text[1], 64)
+							material.specularity = specularity / 1000
+						}
+						if text[0] == "Ni" {
+							ior, _ := strconv.ParseFloat(text[1], 64)
+							material.ior = ior
+						}
+						if text[0] == "d" {
+							transmission, _ := strconv.ParseFloat(text[1], 64)
+							material.transmission = 1 - transmission
+						}
+						if text[0] == "Tr" {
+							transmission, _ := strconv.ParseFloat(text[1], 64)
+							material.transmission = transmission
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return material
+}
+
 func loadOBJ(file *os.File, list *[]Triangle, material Material, smooth bool) {
 	vertices := []Tuple{}
 	vertNormals := []Tuple{}
 	faceVerts := []TrianglePosition{}
 	faceNormals := []TrianglePosition{}
+	var materialFile *os.File
+	f := 0
 
 	defer file.Close()
+	defer materialFile.Close()
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
+		materialFile.Seek(0, io.SeekStart)
 		text := strings.Fields(scanner.Text())
 		if len(text) > 0 {
+			if text[0] == "mtllib" {
+				materialFile, _ = os.Open(text[1])
+			}
+			if text[0] == "usemtl" {
+				material = loadMaterial(materialFile, text[1])
+			}
 			if text[0] == "v" {
 				x, _ := strconv.ParseFloat(text[1], 64)
 				y, _ := strconv.ParseFloat(text[2], 64)
@@ -107,23 +162,22 @@ func loadOBJ(file *os.File, list *[]Triangle, material Material, smooth bool) {
 				faceNormals = append(faceNormals, TrianglePosition{
 					vertNormals[vn1-1], vertNormals[vn2-1], vertNormals[vn3-1],
 				})
+
+				triangle := Triangle{
+					faceVerts[f],
+					faceNormals[f],
+					material,
+					Tuple{0, 0, 0, 0},
+					smooth,
+				}
+				vertex0 := faceNormals[f].vertex0
+				vertex1 := faceNormals[f].vertex1
+				vertex2 := faceNormals[f].vertex2
+				triangle.normal = (vertex0.Add(vertex1).Add(vertex2)).Normalize()
+				*list = append(*list, triangle)
+				f++
 			}
 		}
-	}
-
-	for i := 0; i < len(faceVerts); i++ {
-		triangle := Triangle{
-			faceVerts[i],
-			faceNormals[i],
-			material,
-			Tuple{0, 0, 0, 0},
-			smooth,
-		}
-		vertex0 := faceNormals[i].vertex0
-		vertex1 := faceNormals[i].vertex1
-		vertex2 := faceNormals[i].vertex2
-		triangle.normal = (vertex0.Add(vertex1).Add(vertex2)).Normalize()
-		*list = append(*list, triangle)
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -271,25 +325,19 @@ func main() {
 	listSpheres := []Sphere{}
 	listTriangles := []Triangle{}
 
-	cameraPosition := Tuple{1, 1.25, -2.5, 0}
-	cameraDirection := Tuple{0, 1.25, 0, 0}
+	cameraPosition := Tuple{2, 1, 1, 0}
+	cameraDirection := Tuple{0, 0.66, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 80, float64(hsize)/float64(vsize), 0.05, focusDistance)
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 50, float64(hsize)/float64(vsize), 0.01, focusDistance)
 
-	file, err := os.Open("light.obj")
+	file, err := os.Open("gopher.obj")
 	if err != nil {
 		log.Fatal(err)
 	}
-	loadOBJ(file, &listTriangles, getEmission(getConstant(Color{10, 10, 10})), false)
-
-	file, err = os.Open("buddha.obj")
-	if err != nil {
-		log.Fatal(err)
-	}
-	loadOBJ(file, &listTriangles, getMetal(getConstant(Hex(0xdbaf51)), 0), true)
+	loadOBJ(file, &listTriangles, getLambertian(getConstant(Hex(0))), true)
 
 	log.Println("Building BVHs...")
-	bvh := getBVH(listTriangles, 15, 0)
+	bvh := getBVH(listTriangles, 9, 0)
 	log.Println("Built BVHs")
 
 	// BOTTOM
