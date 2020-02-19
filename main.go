@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	hsize   = 480
-	vsize   = 480
-	samples = 32
+	hsize   = 256
+	vsize   = 256
+	samples = 128
 	depth   = 8
 )
 
@@ -45,6 +45,17 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 	}
 }
 
+func solveQuadratic(a, b, c float64) (float64, float64) {
+	discriminant := b*b - 4*a*c
+	if discriminant > 0 {
+		return (-b - math.Sqrt(discriminant)) / (2.0 * a), (-b + math.Sqrt(discriminant)) / (2.0 * a)
+	} else if discriminant == 0 {
+		return -b / (2.0 * a), -b / (2.0 * a)
+	}
+
+	return math.MaxFloat64, math.MaxFloat64
+}
+
 func loadMaterial(file *os.File, name string) Material {
 	material := Material{material: Lambertian}
 	scanner := bufio.NewScanner(file)
@@ -64,9 +75,22 @@ func loadMaterial(file *os.File, name string) Material {
 							b, _ := strconv.ParseFloat(text[3], 64)
 							material.albedo = getConstant(Color{r, g, b})
 						}
+						if text[0] == "Ks" {
+							r, _ := strconv.ParseFloat(text[1], 64)
+							g, _ := strconv.ParseFloat(text[2], 64)
+							b, _ := strconv.ParseFloat(text[3], 64)
+							material.roughness = (r + g + b) / 3
+						}
 						if text[0] == "Ns" {
 							specularity, _ := strconv.ParseFloat(text[1], 64)
-							material.specularity = specularity / 1000
+							x1, x2 := solveQuadratic(1000, -2000, 1000-specularity)
+							if x1 <= 1.0 && x1 > x2 {
+								material.specularity = x1
+							} else if x2 <= 1.0 {
+								material.specularity = x2
+							} else {
+								material.specularity = 0
+							}
 						}
 						if text[0] == "Ni" {
 							ior, _ := strconv.ParseFloat(text[1], 64)
@@ -79,6 +103,17 @@ func loadMaterial(file *os.File, name string) Material {
 						if text[0] == "Tr" {
 							transmission, _ := strconv.ParseFloat(text[1], 64)
 							material.transmission = transmission
+						}
+						if text[0] == "illum" {
+							mode, _ := strconv.ParseInt(text[1], 0, 0)
+							switch mode {
+							case 1:
+								material.material = Lambertian
+							case 2, 4, 6, 7, 9:
+								material.material = BSDF
+							case 3:
+								material.material = Metal
+							}
 						}
 					}
 				}
@@ -96,7 +131,7 @@ func fileExists(path string) bool {
 	return true
 }
 
-func loadOBJ(path string, list *[]Triangle, material Material, smooth bool) {
+func loadOBJ(path string, list *[]Triangle, material Material, smooth, overrideMaterial bool) {
 	log.Printf("Loading %v...\n", path)
 	vertices := []Tuple{}
 	vertNormals := []Tuple{}
@@ -119,17 +154,19 @@ func loadOBJ(path string, list *[]Triangle, material Material, smooth bool) {
 		materialFile.Seek(0, io.SeekStart)
 		text := strings.Fields(scanner.Text())
 		if len(text) > 0 {
-			if text[0] == "mtllib" {
-				if fileExists(text[1]) {
-					materialFile, _ = os.Open(text[1])
-					exists = true
-				} else {
-					exists = false
+			if !overrideMaterial {
+				if text[0] == "mtllib" {
+					if fileExists(text[1]) {
+						materialFile, _ = os.Open(text[1])
+						exists = true
+					} else {
+						exists = false
+					}
 				}
-			}
-			if text[0] == "usemtl" {
-				if exists {
-					material = loadMaterial(materialFile, text[1])
+				if text[0] == "usemtl" {
+					if exists {
+						material = loadMaterial(materialFile, text[1])
+					}
 				}
 			}
 			if text[0] == "v" {
@@ -440,7 +477,8 @@ func main() {
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.0, focusDistance)
 
-	loadOBJ("cornell_2.obj", &listTriangles, getLambertian(getConstant(Hex(0))), true)
+	loadOBJ("cornell_box.obj", &listTriangles, getLambertian(getConstant(Hex(0))), true, false)
+	loadOBJ("cornell_light.obj", &listTriangles, getEmission(getConstant(Hex(0xffd1a3).MulScalar(5))), false, true)
 
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{-0.160691, 0.862405, 0.532419, 0}, 0.154133,
