@@ -38,10 +38,10 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 			return Color{0, 0, 0}
 		}
 	} else {
-		unit_direction := r.direction.Normalize()
-		t := 0.5 * (unit_direction.y + 1.0)
-		return Color{1.0, 1.0, 1.0}.MulScalar(1.0 - t).Add(Color{0.5, 0.7, 1.0}.MulScalar(t))
-		// return Color{0, 0, 0}
+		// unit_direction := r.direction.Normalize()
+		// t := 0.5 * (unit_direction.y + 1.0)
+		// return Color{1.0, 1.0, 1.0}.MulScalar(1.0 - t).Add(Color{0.5, 0.7, 1.0}.MulScalar(t))
+		return Color{0, 0, 0}
 	}
 }
 
@@ -89,13 +89,28 @@ func loadMaterial(file *os.File, name string) Material {
 	return material
 }
 
-func loadOBJ(file *os.File, list *[]Triangle, material Material, smooth bool) {
+func fileExists(path string) bool {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+func loadOBJ(path string, list *[]Triangle, material Material, smooth bool) {
+	log.Printf("Loading %v...\n", path)
 	vertices := []Tuple{}
 	vertNormals := []Tuple{}
 	faceVerts := []TrianglePosition{}
 	faceNormals := []TrianglePosition{}
 	var materialFile *os.File
+
+	file, err := os.Open(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	f := 0
+	exists := false
 
 	defer file.Close()
 	defer materialFile.Close()
@@ -105,10 +120,17 @@ func loadOBJ(file *os.File, list *[]Triangle, material Material, smooth bool) {
 		text := strings.Fields(scanner.Text())
 		if len(text) > 0 {
 			if text[0] == "mtllib" {
-				materialFile, _ = os.Open(text[1])
+				if fileExists(text[1]) {
+					materialFile, _ = os.Open(text[1])
+					exists = true
+				} else {
+					exists = false
+				}
 			}
 			if text[0] == "usemtl" {
-				material = loadMaterial(materialFile, text[1])
+				if exists {
+					material = loadMaterial(materialFile, text[1])
+				}
 			}
 			if text[0] == "v" {
 				x, _ := strconv.ParseFloat(text[1], 64)
@@ -250,6 +272,34 @@ func getBoundingBox(triangles []Triangle) AABB {
 	return aabb
 }
 
+func getBoundingBoxSpheres(spheres []Sphere) AABB {
+	xMin, xMax, yMin, yMax, zMin, zMax := -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64
+
+	var aabb AABB
+	for _, sphere := range spheres {
+		r := sphere.radius
+		x1 := sphere.origin.x + r
+		x2 := sphere.origin.x - r
+		xMax = math.Min(xMax, x2)
+		xMin = math.Max(xMin, x1)
+
+		y1 := sphere.origin.y + r
+		y2 := sphere.origin.y - r
+		yMax = math.Min(yMax, y2)
+		yMin = math.Max(yMin, y1)
+
+		z1 := sphere.origin.z + r
+		z2 := sphere.origin.z - r
+		zMax = math.Min(zMax, z2)
+		zMin = math.Max(zMin, z1)
+	}
+
+	aabb.min = Tuple{xMax, yMax, zMax, 0}
+	aabb.max = Tuple{xMin, yMin, zMin, 0}
+
+	return aabb
+}
+
 func getBVH(triangles []Triangle, depth, x int) *BVH {
 	x++
 	if x > 2 {
@@ -306,6 +356,62 @@ func getBVH(triangles []Triangle, depth, x int) *BVH {
 	}
 }
 
+func getBVHSphere(spheres []Sphere, depth, x int) *BVHSphere {
+	x++
+	if x > 2 {
+		x = 0
+	}
+	if x == 0 {
+		sort.Slice(spheres[:], func(i, j int) bool {
+			return spheres[i].origin.x < spheres[j].origin.x
+		})
+	} else if x == 1 {
+		sort.Slice(spheres[:], func(i, j int) bool {
+			return spheres[i].origin.y < spheres[j].origin.y
+		})
+	} else if x == 2 {
+		sort.Slice(spheres[:], func(i, j int) bool {
+			return spheres[i].origin.z < spheres[j].origin.z
+		})
+	}
+	size := len(spheres) / 2
+	rightList := spheres[:size]
+	leftList := spheres[size:]
+	aabbLeft := getBoundingBoxSpheres(leftList)
+	aabbRight := getBoundingBoxSpheres(rightList)
+	if size <= 1 {
+		return &BVHSphere{
+			&BVHSphere{}, &BVHSphere{},
+			[2]LeafSphere{
+				LeafSphere{aabbLeft, leftList},
+				LeafSphere{aabbRight, rightList},
+			},
+			getBoundingBoxSpheres(spheres),
+			true,
+			depth,
+		}
+	}
+	if depth > 0 {
+		return &BVHSphere{
+			getBVHSphere(leftList, depth-1, x), getBVHSphere(rightList, depth-1, x),
+			[2]LeafSphere{},
+			getBoundingBoxSpheres(spheres),
+			false,
+			depth,
+		}
+	}
+	return &BVHSphere{
+		&BVHSphere{}, &BVHSphere{},
+		[2]LeafSphere{
+			LeafSphere{aabbLeft, leftList},
+			LeafSphere{aabbRight, rightList},
+		},
+		getBoundingBoxSpheres(spheres),
+		true,
+		depth,
+	}
+}
+
 func loadTexture(texture image.Image) [][]Color {
 	width := texture.Bounds().Dx()
 	height := texture.Bounds().Dy()
@@ -325,31 +431,28 @@ func loadTexture(texture image.Image) [][]Color {
 }
 
 func main() {
+	log.Println("Loading scene...")
 	listSpheres := []Sphere{}
 	listTriangles := []Triangle{}
 
-	cameraPosition := Tuple{3, 1, 1, 0}
-	cameraDirection := Tuple{0, 0.75, 0, 0}
+	cameraPosition := Tuple{4, 1, 0, 0}
+	cameraDirection := Tuple{0, 1, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 50, float64(hsize)/float64(vsize), 0.01, focusDistance)
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.0, focusDistance)
 
-	file, err := os.Open("gopher.obj")
-	if err != nil {
-		log.Fatal(err)
-	}
-	loadOBJ(file, &listTriangles, getLambertian(getConstant(Hex(0))), true)
+	loadOBJ("cornell_2.obj", &listTriangles, getLambertian(getConstant(Hex(0))), true)
 
-	log.Println("Building BVHs...")
-	bvh := getBVH(listTriangles, 9, 0)
-	log.Println("Built BVHs")
-
-	// BOTTOM
 	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, -10000, 0, 0}, 10000,
-		Material{Lambertian, getCheckerboard(Color{1, 1, 1}, Color{0.5, 0.5, 0.5}, 1, 1, 1), 0, 1.45, 0, 0, 0},
+		Tuple{-0.160691, 0.862405, 0.532419, 0}, 0.154133,
+		getDielectric(getConstant(Hex(0xffffff)), 0, 0.5, 1.45),
 	})
 
-	world := HittableList{listSpheres, *bvh}
+	log.Println("Building BVHs...")
+	bvh := getBVH(listTriangles, 15, 0)
+	sphereBVH := getBVHSphere(listSpheres, 1, 0)
+	log.Println("Built BVHs")
+
+	world := HittableList{*sphereBVH, *bvh}
 
 	cpus := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpus)
@@ -413,7 +516,7 @@ func main() {
 	close(ch)
 
 	if remainder != 0 {
-		ch = make(chan int, cpus)
+		ch = make(chan int, remainder)
 		log.Printf("\nRendering additional %d samples...\n", remainder)
 		for i := 0; i < remainder; i++ {
 			go func(i int) {
@@ -435,7 +538,7 @@ func main() {
 
 				doneSamples++
 				sampleTime := time.Since(sample)
-				fmt.Printf("\r%.2f%% (% 3d/% 3d) % 15s/sample, % 15s sample time, ETA: % 15s", float64(doneSamples)/float64(samples)*100, doneSamples, samples, sampleTime, sampleTime/(vsize*hsize), sampleTime*(time.Duration(samples)-time.Duration(doneSamples))/time.Duration(cpus))
+				fmt.Printf("\r%.2f%% (% 3d/% 3d) % 15s/sample, % 15s sample time, ETA: % 15s", float64(doneSamples)/float64(samples)*100, doneSamples, samples, sampleTime, sampleTime/(vsize*hsize), sampleTime*(time.Duration(samples)-time.Duration(doneSamples))/time.Duration(remainder))
 				ch <- 1
 			}(i)
 		}
@@ -466,5 +569,5 @@ func main() {
 	// filename := fmt.Sprintf("frame_%d.ppm", 0)
 	filename := fmt.Sprintf("frame_%d", time.Now().UnixNano()/1e6)
 
-	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 16)
+	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 8)
 }

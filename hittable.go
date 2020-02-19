@@ -12,8 +12,8 @@ type HitRecord struct {
 }
 
 type HittableList struct {
-	sphereHits []Sphere
-	bvh        BVH
+	sphereBvh BVHSphere
+	bvh       BVH
 }
 
 type AABB struct {
@@ -31,6 +31,19 @@ type BVH struct {
 type Leaf struct {
 	bounds    AABB
 	triangles []Triangle
+}
+
+type BVHSphere struct {
+	left, right *BVHSphere
+	leaves      [2]LeafSphere
+	bounds      AABB
+	last        bool
+	depth       int
+}
+
+type LeafSphere struct {
+	bounds  AABB
+	spheres []Sphere
 }
 
 func hitBVH(tree *BVH, level int, r Ray, tMin, tMax float64) [][2]Leaf {
@@ -55,21 +68,50 @@ func hitBVH(tree *BVH, level int, r Ray, tMin, tMax float64) [][2]Leaf {
 	return temp
 }
 
+func hitBVHSphere(tree *BVHSphere, level int, r Ray, tMin, tMax float64) [][2]LeafSphere {
+	temp := [][2]LeafSphere{}
+	if tree == nil {
+		return nil
+	}
+	if tree.last {
+		if tree.bounds.hit(r, tMin, tMax) {
+			return append(temp, tree.leaves)
+		}
+		return temp
+	} else if level > 0 {
+		if tree.left.bounds.hit(r, tMin, tMax) {
+			temp = hitBVHSphere(tree.left, level-1, r, tMin, tMax)
+		}
+		if tree.right.bounds.hit(r, tMin, tMax) {
+			tr := hitBVHSphere(tree.right, level-1, r, tMin, tMax)
+			temp = append(temp, tr...)
+		}
+	}
+	return temp
+}
+
 func (h *HittableList) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 	var tempRec HitRecord
 	hitAnything := false
 	closestSoFar := tMax
-	for i := 0; i < len(h.sphereHits); i++ {
-		if h.sphereHits[i].hit(r, tMin, closestSoFar, &tempRec) {
-			hitAnything = true
-			closestSoFar = tempRec.t
-			*rec = tempRec
+
+	spheres := hitBVHSphere(&h.sphereBvh, h.sphereBvh.depth, r, tMin, tMax)
+
+	for i := 0; i < len(spheres); i++ {
+		for j := 0; j < 2; j++ {
+			if spheres[i][j].bounds.hit(r, tMin, tMax) {
+				for k := 0; k < len(spheres[i][j].spheres); k++ {
+					if spheres[i][j].spheres[k].hit(r, tMin, closestSoFar, &tempRec) {
+						hitAnything = true
+						closestSoFar = tempRec.t
+						*rec = tempRec
+					}
+				}
+			}
 		}
 	}
 
-	current := &h.bvh
-
-	tris := hitBVH(current, current.depth, r, tMin, tMax)
+	tris := hitBVH(&h.bvh, h.bvh.depth, r, tMin, tMax)
 
 	for i := 0; i < len(tris); i++ {
 		for j := 0; j < 2; j++ {
@@ -87,20 +129,10 @@ func (h *HittableList) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 	return hitAnything
 }
 
-// func (s Sphere) uv(p Tuple) (float64, float64) {
-// 	phi := math.Atan2(p.z, p.x)
-// 	theta := math.Asin(p.y)
-// 	fmt.Printf("%v\n", theta)
-// 	u := 1 - (phi+math.Pi)/(2*math.Pi)
-// 	v := (theta + math.Pi/2) / math.Pi
-// 	return u, v
-// }
-
 func (s Sphere) uv(p Tuple) (float64, float64) {
 	d := s.origin.Subtract(p).Normalize()
 	u := 0.5 - (math.Atan2(d.z, d.x))/(2*math.Pi)
 	v := 0.5 + (math.Asin(d.y))/(math.Pi)
-	// fmt.Printf("%v %v\n", u, v)
 	return u, v
 }
 
