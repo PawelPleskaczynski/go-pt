@@ -1,8 +1,7 @@
 # go-pt
 
-This project is a Monte Carlo path tracer written in Golang that runs on CPU only.
-![dragon](./images/dragon_big.png)
-This scene consists of 871308 triangles and 6 spheres. It was rendered at 1500x1500 px at 8192 samples/pixel in 11 hours and 54 minutes on my Ryzen 7 2700X CPU.
+This project is a Monte Carlo path tracer written in Golang that runs on CPU.
+![dragon](./images/top.png)
 
 ## Features
 ### Implemented
@@ -38,6 +37,7 @@ This scene consists of 871308 triangles and 6 spheres. It was rendered at 1500x1
 - Spectral rendering
 
 ## Example renders
+![objects](./images/cornell_objects.png)
 ![earth](./images/earth.png)
 ![bunny](./images/bunny.png)
 ![spheres](./images/spheres.png)
