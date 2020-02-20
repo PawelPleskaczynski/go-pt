@@ -69,6 +69,16 @@ func loadMaterial(file *os.File, name string) Material {
 						if text[0] == "newmtl" {
 							break
 						}
+						if text[0] == "Ke" {
+							r, _ := strconv.ParseFloat(text[1], 64)
+							g, _ := strconv.ParseFloat(text[2], 64)
+							b, _ := strconv.ParseFloat(text[3], 64)
+							if r > 0.0 || g > 0.0 || b > 0.0 {
+								material.albedo = getConstant(Color{r, g, b})
+								material.material = Emission
+								break
+							}
+						}
 						if text[0] == "Kd" {
 							r, _ := strconv.ParseFloat(text[1], 64)
 							g, _ := strconv.ParseFloat(text[2], 64)
@@ -184,10 +194,10 @@ func loadOBJ(path string, list *[]Triangle, material Material, smooth, overrideM
 				})
 			} else if text[0] == "f" {
 				vertCount := len(text) - 1
-				for i := 0; i < vertCount-1; i++ {
+				for i := 0; i < vertCount-2; i++ {
 					values1 := strings.Split(text[1], "/")
-					values2 := strings.Split(text[i+1], "/")
-					values3 := strings.Split(text[i+2], "/")
+					values2 := strings.Split(text[i+2], "/")
+					values3 := strings.Split(text[i+3], "/")
 
 					v1, _ := strconv.Atoi(values1[0])
 					v2, _ := strconv.Atoi(values2[0])
