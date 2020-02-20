@@ -79,18 +79,17 @@ func loadMaterial(file *os.File, name string) Material {
 							r, _ := strconv.ParseFloat(text[1], 64)
 							g, _ := strconv.ParseFloat(text[2], 64)
 							b, _ := strconv.ParseFloat(text[3], 64)
-							material.roughness = (r + g + b) / 3
+							material.specularity = (r + g + b) / 3
 						}
 						if text[0] == "Ns" {
-							specularity, _ := strconv.ParseFloat(text[1], 64)
-							x1, x2 := solveQuadratic(1000, -2000, 1000-specularity)
-							if x1 <= 1.0 && x1 > x2 {
-								material.specularity = x1
-							} else if x2 <= 1.0 {
-								material.specularity = x2
-							} else {
-								material.specularity = 0
+							roughness, _ := strconv.ParseFloat(text[1], 64)
+							x1, _ := solveQuadratic(900, -1800, 900-roughness)
+							if x1 > 1.0 {
+								x1 = 1.0
+							} else if x1 < 0.0 {
+								x1 = 0.0
 							}
+							material.roughness = x1
 						}
 						if text[0] == "Ni" {
 							ior, _ := strconv.ParseFloat(text[1], 64)
@@ -472,13 +471,18 @@ func main() {
 	listSpheres := []Sphere{}
 	listTriangles := []Triangle{}
 
+	averageFrameTime := time.Duration(0.0)
+	averageSampleTime := time.Duration(0.0)
+
 	cameraPosition := Tuple{4, 1, 0, 0}
 	cameraDirection := Tuple{0, 1, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.0, focusDistance)
 
-	loadOBJ("cornell_box.obj", &listTriangles, getLambertian(getConstant(Hex(0))), true, false)
-	loadOBJ("cornell_light.obj", &listTriangles, getEmission(getConstant(Hex(0xffd1a3).MulScalar(5))), false, true)
+	loadOBJ("cornellbox_objects_final.obj", &listTriangles, getLambertian(getConstant(Hex(0))), true, false)
+	loadOBJ("cornellbox_light_top.obj", &listTriangles, getEmission(getConstant(Hex(0xffd1a3).MulScalar(5))), false, true)
+	loadOBJ("cornellbox_light_bottom.obj", &listTriangles, getEmission(getConstant(Hex(0xffffff))), false, true)
+	loadOBJ("cornellbox_floor.obj", &listTriangles, getDiffuse(getCheckerboard(Color{1, 1, 1}, Color{0.5, 0.5, 0.5}, 0.125, 0.125, 0.125), 0.1, 0.15), false, true)
 
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{-0.160691, 0.862405, 0.532419, 0}, 0.154133,
@@ -542,7 +546,9 @@ func main() {
 
 				doneSamples++
 				sampleTime := time.Since(sample)
-				fmt.Printf("\r%.2f%% (% 3d/% 3d) % 15s/sample, % 15s sample time, ETA: % 15s", float64(doneSamples)/float64(samples)*100, doneSamples, samples, sampleTime, sampleTime/(vsize*hsize), sampleTime*(time.Duration(samples)-time.Duration(doneSamples))/time.Duration(cpus))
+				averageFrameTime += sampleTime
+				averageSampleTime += sampleTime / (vsize * hsize)
+				fmt.Printf("\r%.2f%% (% 3d/% 3d) % 15s/frame, % 15s sample time, ETA: % 15s", float64(doneSamples)/float64(samples)*100, doneSamples, samples, sampleTime, sampleTime/(vsize*hsize), sampleTime*(time.Duration(samples)-time.Duration(doneSamples))/time.Duration(cpus))
 			}
 			ch <- 1
 		}(i)
@@ -554,8 +560,9 @@ func main() {
 	close(ch)
 
 	if remainder != 0 {
+		println()
 		ch = make(chan int, remainder)
-		log.Printf("\nRendering additional %d samples...\n", remainder)
+		log.Printf("Rendering additional %d samples...\n", remainder)
 		for i := 0; i < remainder; i++ {
 			go func(i int) {
 				source := rand.NewSource(time.Now().UnixNano())
@@ -576,7 +583,7 @@ func main() {
 
 				doneSamples++
 				sampleTime := time.Since(sample)
-				fmt.Printf("\r%.2f%% (% 3d/% 3d) % 15s/sample, % 15s sample time, ETA: % 15s", float64(doneSamples)/float64(samples)*100, doneSamples, samples, sampleTime, sampleTime/(vsize*hsize), sampleTime*(time.Duration(samples)-time.Duration(doneSamples))/time.Duration(remainder))
+				fmt.Printf("\r%.2f%% (% 3d/% 3d) % 15s/frame, % 15s sample time, ETA: % 15s", float64(doneSamples)/float64(samples)*100, doneSamples, samples, sampleTime, sampleTime/(vsize*hsize), sampleTime*(time.Duration(samples)-time.Duration(doneSamples))/time.Duration(remainder))
 				ch <- 1
 			}(i)
 		}
@@ -587,8 +594,10 @@ func main() {
 		close(ch)
 	}
 
+	println()
+
 	elapsed := time.Since(start)
-	log.Printf("\nRendering took %s\n", elapsed)
+	log.Printf("Rendering took %s\nAverage frame time: %s, average sample time: %s\n", elapsed, averageFrameTime/samples, averageSampleTime/samples)
 	for i := 0; i < cpus; i++ {
 		for y := 0; y < vsize; y++ {
 			for x := 0; x < hsize; x++ {
