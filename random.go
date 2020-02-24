@@ -16,7 +16,7 @@ func RandInUnitSphere(generator rand.Rand) Tuple {
 			break
 		}
 	}
-	return p
+	return p.Normalize()
 }
 
 func RandInUnitHemisphere(generator rand.Rand, normal Tuple) Tuple {
