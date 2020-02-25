@@ -17,10 +17,11 @@ import (
 )
 
 const (
-	hsize   = 256
-	vsize   = 256
-	samples = 128
-	depth   = 8
+	hsize          = 256
+	vsize          = 256
+	samples        = 128
+	depth          = 8
+	limitTriangles = 100
 )
 
 func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
@@ -382,7 +383,7 @@ func getBVH(triangles []Triangle, depth, x int) *BVH {
 	leftList := triangles[size:]
 	aabbLeft := getBoundingBox(leftList)
 	aabbRight := getBoundingBox(rightList)
-	if size <= 1 {
+	if size <= limitTriangles {
 		return &BVH{
 			&BVH{}, &BVH{},
 			[2]Leaf{
@@ -498,12 +499,22 @@ func main() {
 	averageSampleTime := time.Duration(0.0)
 	numTris := 0
 
-	cameraPosition := Tuple{-3.09342, 1.01126, 0.624835, 0}
-	cameraDirection := Tuple{-0.141233, 0.91176, -0.01479, 0}
+	cameraPosition := Tuple{0.4, 0.2, -0.7, 0}
+	cameraDirection := Tuple{0, 0.1, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 40, float64(hsize)/float64(vsize), 0.0, focusDistance)
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 30, float64(hsize)/float64(vsize), 0.0, focusDistance)
 
-	loadOBJ("angel.obj", &listTriangles, Material{}, true, false)
+	loadOBJ("moriknob.obj", &listTriangles, Material{}, true, false)
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, -10000 - Epsilon - Epsilon, 0, 0}, 10000,
+		getLambertian(getCheckerboard(Color{1, 1, 1}, Color{0.5, 0.5, 0.5}, 0.05, 0.05, 0.05)),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0.5, 0.5, 1, 0}, 0.25,
+		getEmission(getConstant(Hex(0xffffff).MulScalar(10))),
+	})
 
 	bvh := []*BVH{}
 

@@ -1,7 +1,7 @@
 # go-pt
 
 This project is a Monte Carlo path tracer written in Golang that runs on CPU.
-![dragon](./images/top.png)
+![angel](https://i.imgur.com/HOBWasb.png)
 
 ## Features
 ### Implemented
@@ -37,9 +37,26 @@ This project is a Monte Carlo path tracer written in Golang that runs on CPU.
 - Spectral rendering
 
 ## Example renders
-![objects](./images/cornell_objects.png)
-![earth](./images/earth.png)
-![bunny](./images/bunny.png)
-![spheres](./images/spheres.png)
-![dragon](./images/dragon_small.png)
-![cornell box with spheres](./images/cornell_spheres.png)
+Models downloaded from Morgan McGuire's [Computer Graphics Archive](https://casual-effects.com/data).
+The Go gopher was designed by Renee French. (http://reneefrench.blogspot.com/) The gopher 3D model was made by Takuya Ueda (https://twitter.com/tenntenn).
+
+
+Cornell box
+
+![Cornell box](https://i.imgur.com/dSaLhwd.png)
+
+Mori knob
+
+![Mori knob](https://i.imgur.com/jE4yPNP.png)
+
+Stanford dragon with glossy, glass and metal spheres
+
+![dragon](https://i.imgur.com/iLplu0d.png)
+
+Cornell box with various objects
+
+![box with objects](https://i.imgur.com/V7AuTSD.png)
+
+Sphere with UV texture
+
+![Sphere with UV texture](https://i.imgur.com/ZQDCjSn.png)

@@ -3,4 +3,3 @@
 *.obj
 *.mtl
 test/
-!images/*.png
