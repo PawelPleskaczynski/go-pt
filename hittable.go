@@ -13,7 +13,7 @@ type HitRecord struct {
 
 type HittableList struct {
 	sphereBvh BVHSphere
-	bvh       BVH
+	bvh       []*BVH
 }
 
 type AABB struct {
@@ -46,16 +46,22 @@ type LeafSphere struct {
 	spheres []Sphere
 }
 
-func hitBVH(tree *BVH, level int, r Ray, tMin, tMax float64) [][2]Leaf {
-	temp := [][2]Leaf{}
+func hitBVH(tree *BVH, level int, r Ray, tMin, tMax float64) []Leaf {
+	temp := []Leaf{}
 	if tree == nil {
 		return nil
 	}
 	if tree.last {
 		if tree.bounds.hit(r, tMin, tMax) {
-			return append(temp, tree.leaves)
+			if tree.leaves[0].bounds.hit(r, tMin, tMax) {
+				temp = append(temp, tree.leaves[0])
+			}
+			if tree.leaves[1].bounds.hit(r, tMin, tMax) {
+				temp = append(temp, tree.leaves[1])
+			}
+			return temp
 		}
-		return temp
+		return nil
 	} else if level > 0 {
 		if tree.left.bounds.hit(r, tMin, tMax) {
 			temp = hitBVH(tree.left, level-1, r, tMin, tMax)
@@ -111,21 +117,19 @@ func (h *HittableList) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 		}
 	}
 
-	tris := hitBVH(&h.bvh, h.bvh.depth, r, tMin, tMax)
-
-	for i := 0; i < len(tris); i++ {
-		for j := 0; j < 2; j++ {
-			if tris[i][j].bounds.hit(r, tMin, tMax) {
-				for k := 0; k < len(tris[i][j].triangles); k++ {
-					if tris[i][j].triangles[k].hit(r, tMin, closestSoFar, &tempRec) {
-						hitAnything = true
-						closestSoFar = tempRec.t
-						*rec = tempRec
-					}
+	for i := 0; i < len(h.bvh); i++ {
+		tris := hitBVH(h.bvh[i], h.bvh[i].depth, r, tMin, tMax)
+		for j := 0; j < len(tris); j++ {
+			for k := 0; k < len(tris[j].triangles); k++ {
+				if tris[j].triangles[k].hit(r, tMin, closestSoFar, &tempRec) {
+					hitAnything = true
+					closestSoFar = tempRec.t
+					*rec = tempRec
 				}
 			}
 		}
 	}
+
 	return hitAnything
 }
 

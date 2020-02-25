@@ -140,7 +140,7 @@ func fileExists(path string) bool {
 	return true
 }
 
-func loadOBJ(path string, list *[]Triangle, material Material, smooth, overrideMaterial bool) {
+func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrideMaterial bool) {
 	log.Printf("Loading %v...\n", path)
 	vertices := []Tuple{}
 	vertNormals := []Tuple{}
@@ -156,6 +156,8 @@ func loadOBJ(path string, list *[]Triangle, material Material, smooth, overrideM
 	f := 0
 	exists := false
 
+	object := []Triangle{}
+
 	defer file.Close()
 	defer materialFile.Close()
 	scanner := bufio.NewScanner(file)
@@ -163,6 +165,12 @@ func loadOBJ(path string, list *[]Triangle, material Material, smooth, overrideM
 		materialFile.Seek(0, io.SeekStart)
 		text := strings.Fields(scanner.Text())
 		if len(text) > 0 {
+			if text[0] == "o" {
+				if len(object) > 0 {
+					*list = append(*list, object)
+					object = nil
+				}
+			}
 			if !overrideMaterial {
 				if text[0] == "mtllib" {
 					if fileExists(text[1]) {
@@ -244,11 +252,16 @@ func loadOBJ(path string, list *[]Triangle, material Material, smooth, overrideM
 					vertex1 := faceNormals[f].vertex1
 					vertex2 := faceNormals[f].vertex2
 					triangle.normal = (vertex0.Add(vertex1).Add(vertex2)).Normalize()
-					*list = append(*list, triangle)
+					object = append(object, triangle)
 					f++
 				}
 			}
 		}
+	}
+
+	if len(object) > 0 {
+		*list = append(*list, object)
+		object = nil
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -347,7 +360,6 @@ func getBoundingBoxSpheres(spheres []Sphere) AABB {
 }
 
 func getBVH(triangles []Triangle, depth, x int) *BVH {
-	x++
 	if x > 2 {
 		x = 0
 	}
@@ -364,6 +376,7 @@ func getBVH(triangles []Triangle, depth, x int) *BVH {
 			return triangles[i].position.vertex0.z < triangles[j].position.vertex0.z
 		})
 	}
+	x++
 	size := len(triangles) / 2
 	rightList := triangles[:size]
 	leftList := triangles[size:]
@@ -479,32 +492,30 @@ func loadTexture(texture image.Image) [][]Color {
 func main() {
 	log.Println("Loading scene...")
 	listSpheres := []Sphere{}
-	listTriangles := []Triangle{}
+	listTriangles := [][]Triangle{}
 
 	averageFrameTime := time.Duration(0.0)
 	averageSampleTime := time.Duration(0.0)
+	numTris := 0
 
-	cameraPosition := Tuple{4, 1, 0, 0}
-	cameraDirection := Tuple{0, 1, 0, 0}
+	cameraPosition := Tuple{-3.09342, 1.01126, 0.624835, 0}
+	cameraDirection := Tuple{-0.141233, 0.91176, -0.01479, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.0, focusDistance)
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 40, float64(hsize)/float64(vsize), 0.0, focusDistance)
 
-	loadOBJ("cornellbox_objects_final.obj", &listTriangles, getLambertian(getConstant(Hex(0))), true, false)
-	loadOBJ("cornellbox_light_top.obj", &listTriangles, getEmission(getConstant(Hex(0xffd1a3).MulScalar(5))), false, true)
-	loadOBJ("cornellbox_light_bottom.obj", &listTriangles, getEmission(getConstant(Hex(0xffffff))), false, true)
-	loadOBJ("cornellbox_floor.obj", &listTriangles, getDiffuse(getCheckerboard(Color{1, 1, 1}, Color{0.5, 0.5, 0.5}, 0.125, 0.125, 0.125), 0.1, 0.15), false, true)
+	loadOBJ("angel.obj", &listTriangles, Material{}, true, false)
 
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-0.160691, 0.862405, 0.532419, 0}, 0.154133,
-		getDielectric(getConstant(Hex(0xffffff)), 0, 0.5, 1.45),
-	})
+	bvh := []*BVH{}
 
 	log.Println("Building BVHs...")
-	bvh := getBVH(listTriangles, 15, 0)
-	sphereBVH := getBVHSphere(listSpheres, 1, 0)
+	for i := 0; i < len(listTriangles); i++ {
+		bvh = append(bvh, getBVH(listTriangles[i], 24, 0))
+		numTris += len(listTriangles[i])
+	}
+	sphereBVH := getBVHSphere(listSpheres, 0, 0)
 	log.Println("Built BVHs")
 
-	world := HittableList{*sphereBVH, *bvh}
+	world := HittableList{*sphereBVH, bvh}
 
 	cpus := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpus)
@@ -533,7 +544,7 @@ func main() {
 
 	doneSamples := 0
 
-	log.Printf("Rendering %d triangles and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), len(listSpheres), hsize, vsize, samples, cpus)
+	log.Printf("Rendering %d objects (%d triangles) and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), numTris, len(listSpheres), hsize, vsize, samples, cpus)
 
 	for i := 0; i < cpus; i++ {
 		go func(i int) {
@@ -626,5 +637,5 @@ func main() {
 	// filename := fmt.Sprintf("frame_%d.ppm", 0)
 	filename := fmt.Sprintf("frame_%d", time.Now().UnixNano()/1e6)
 
-	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 8)
+	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 16)
 }
