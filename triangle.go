@@ -6,6 +6,7 @@ type TrianglePosition struct {
 
 type Triangle struct {
 	position TrianglePosition
+	vtexture TrianglePosition
 	vnormals TrianglePosition
 	material Material
 	normal   Tuple

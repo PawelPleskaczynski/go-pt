@@ -6,6 +6,7 @@ import (
 
 type HitRecord struct {
 	u, v, t  float64
+	uT, vT   float64
 	p        Tuple
 	normal   Tuple
 	material Material
@@ -152,7 +153,7 @@ func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 			*&rec.t = temp
 			*&rec.p = r.Position(rec.t)
 			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius).Normalize()
-			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == ImageUV {
+			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == SphereImageUV {
 				*&rec.u, *&rec.v = s.uv(*&rec.p)
 			}
 			*&rec.material = s.material
@@ -163,7 +164,7 @@ func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 			*&rec.t = temp
 			*&rec.p = r.Position(rec.t)
 			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius).Normalize()
-			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == ImageUV {
+			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == SphereImageUV {
 				*&rec.u, *&rec.v = s.uv(*&rec.p)
 			}
 			*&rec.material = s.material
@@ -202,6 +203,16 @@ func (tri *Triangle) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 		*&rec.material = tri.material
 		*&rec.u = u
 		*&rec.v = v
+
+		if tri.material.albedo.mode == TriangleImageUV {
+			vt1 := tri.vtexture.vertex0
+			vt2 := tri.vtexture.vertex1
+			vt3 := tri.vtexture.vertex2
+			x := vt2.MulScalar(u).Add(vt3.MulScalar(v)).Add(vt1.MulScalar(1 - u - v))
+			*&rec.uT = x.x
+			*&rec.vT = x.y
+		}
+
 		if tri.smooth {
 			vn1 := tri.vnormals.vertex0
 			vn2 := tri.vnormals.vertex1

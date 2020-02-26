@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"image"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"log"
 	"math"
@@ -18,7 +20,7 @@ import (
 
 const (
 	hsize          = 256
-	vsize          = 256
+	vsize          = 128
 	samples        = 128
 	depth          = 8
 	limitTriangles = 100
@@ -31,7 +33,7 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 		var scattered Ray
 		if d < depth && rec.material.Scatter(r, rec, &attenuation, &scattered, generator) {
 			if rec.material.material == Emission {
-				return rec.material.albedo.color(0, 0, rec.p)
+				return rec.material.albedo.color(rec)
 			} else {
 				return attenuation.Mul(colorize(scattered, world, d+1, generator))
 			}
@@ -39,10 +41,10 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 			return Color{0, 0, 0}
 		}
 	} else {
-		// unit_direction := r.direction.Normalize()
-		// t := 0.5 * (unit_direction.y + 1.0)
-		// return Color{1.0, 1.0, 1.0}.MulScalar(1.0 - t).Add(Color{0.5, 0.7, 1.0}.MulScalar(t))
-		return Color{0, 0, 0}
+		unit_direction := r.direction.Normalize()
+		t := 0.5 * (unit_direction.y + 1.0)
+		return Color{1.0, 1.0, 1.0}.MulScalar(1.0 - t).Add(Color{0.5, 0.7, 1.0}.MulScalar(t))
+		// return Color{0, 0, 0}
 	}
 }
 
@@ -125,6 +127,19 @@ func loadMaterial(file *os.File, name string) Material {
 								material.material = Metal
 							}
 						}
+						if text[0] == "map_Kd" {
+							if fileExists(text[1]) {
+								textureFile, _ := os.Open(text[1])
+								var texture image.Image
+								if strings.HasSuffix(strings.ToLower(text[1]), "png") {
+									texture, _ = png.Decode(textureFile)
+								} else if strings.HasSuffix(strings.ToLower(text[1]), "jpg") || strings.HasSuffix(strings.ToLower(text[1]), "jpeg") {
+									texture, _ = jpeg.Decode(textureFile)
+								}
+								material.albedo.texture = loadTexture(texture)
+								material.albedo.mode = TriangleImageUV
+							}
+						}
 					}
 				}
 			}
@@ -145,8 +160,10 @@ func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrid
 	log.Printf("Loading %v...\n", path)
 	vertices := []Tuple{}
 	vertNormals := []Tuple{}
+	vertTexture := []Tuple{}
 	faceVerts := []TrianglePosition{}
 	faceNormals := []TrianglePosition{}
+	faceTexture := []TrianglePosition{}
 	var materialFile *os.File
 
 	file, err := os.Open(path)
@@ -155,6 +172,7 @@ func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrid
 	}
 
 	f := 0
+
 	exists := false
 
 	object := []Triangle{}
@@ -201,6 +219,12 @@ func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrid
 				vertNormals = append(vertNormals, Tuple{
 					x, y, z, 0,
 				})
+			} else if text[0] == "vt" {
+				u, _ := strconv.ParseFloat(text[1], 64)
+				v, _ := strconv.ParseFloat(text[2], 64)
+				vertTexture = append(vertTexture, Tuple{
+					u, v, 1, 0,
+				})
 			} else if text[0] == "f" {
 				vertCount := len(text) - 1
 				for i := 0; i < vertCount-2; i++ {
@@ -208,13 +232,56 @@ func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrid
 					values2 := strings.Split(text[i+2], "/")
 					values3 := strings.Split(text[i+3], "/")
 
-					v1, _ := strconv.Atoi(values1[0])
-					v2, _ := strconv.Atoi(values2[0])
-					v3, _ := strconv.Atoi(values3[0])
+					var v1, v2, v3, vt1, vt2, vt3, vn1, vn2, vn3 int
 
-					vn1, _ := strconv.Atoi(values1[2])
-					vn2, _ := strconv.Atoi(values2[2])
-					vn3, _ := strconv.Atoi(values3[2])
+					v1, _ = strconv.Atoi(values1[0])
+					v2, _ = strconv.Atoi(values2[0])
+					v3, _ = strconv.Atoi(values3[0])
+
+					if values1[1] != "" && values2[1] != "" && values3[1] != "" {
+						vt1, _ = strconv.Atoi(values1[1])
+						vt2, _ = strconv.Atoi(values2[1])
+						vt3, _ = strconv.Atoi(values3[1])
+
+						if vt1 < 0 {
+							vt1 = len(vertNormals) + vt1 + 1
+						}
+						if vt2 < 0 {
+							vt2 = len(vertNormals) + vt2 + 1
+						}
+						if vt3 < 0 {
+							vt3 = len(vertNormals) + vt3 + 1
+						}
+
+						faceTexture = append(faceTexture, TrianglePosition{
+							vertTexture[vt1-1], vertTexture[vt2-1], vertTexture[vt3-1],
+						})
+					} else {
+						faceTexture = append(faceTexture, TrianglePosition{})
+					}
+
+					if values1[2] != "" && values2[2] != "" && values3[2] != "" {
+						vn1, _ = strconv.Atoi(values1[2])
+						vn2, _ = strconv.Atoi(values2[2])
+						vn3, _ = strconv.Atoi(values3[2])
+
+						if vn1 < 0 {
+							vn1 = len(vertNormals) + vn1 + 1
+						}
+						if vn2 < 0 {
+							vn2 = len(vertNormals) + vn2 + 1
+						}
+						if vn3 < 0 {
+							vn3 = len(vertNormals) + vn3 + 1
+						}
+
+						faceNormals = append(faceNormals, TrianglePosition{
+							vertNormals[vn1-1], vertNormals[vn2-1], vertNormals[vn3-1],
+						})
+					} else {
+						faceNormals = append(faceNormals, TrianglePosition{})
+					}
+
 					if v1 < 0 {
 						v1 = len(vertices) + v1 + 1
 					}
@@ -224,26 +291,14 @@ func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrid
 					if v3 < 0 {
 						v3 = len(vertices) + v3 + 1
 					}
-					if vn1 < 0 {
-						vn1 = len(vertNormals) + vn1 + 1
-					}
-					if vn2 < 0 {
-						vn2 = len(vertNormals) + vn2 + 1
-					}
-					if vn3 < 0 {
-						vn3 = len(vertNormals) + vn3 + 1
-					}
 
 					faceVerts = append(faceVerts, TrianglePosition{
 						vertices[v1-1], vertices[v2-1], vertices[v3-1],
 					})
 
-					faceNormals = append(faceNormals, TrianglePosition{
-						vertNormals[vn1-1], vertNormals[vn2-1], vertNormals[vn3-1],
-					})
-
 					triangle := Triangle{
 						faceVerts[f],
+						faceTexture[f],
 						faceNormals[f],
 						material,
 						Tuple{0, 0, 0, 0},
@@ -499,22 +554,14 @@ func main() {
 	averageSampleTime := time.Duration(0.0)
 	numTris := 0
 
-	cameraPosition := Tuple{0.4, 0.2, -0.7, 0}
-	cameraDirection := Tuple{0, 0.1, 0, 0}
+	cameraPosition := Tuple{0.5, 0.5, 1.5, 0}
+	cameraDirection := Tuple{0, 0, 0, 0}
+	// cameraPosition := Tuple{2, 1, 2, 0}
+	// cameraDirection := Tuple{0, 0.5, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 30, float64(hsize)/float64(vsize), 0.0, focusDistance)
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 70, float64(hsize)/float64(vsize), 0.05, focusDistance)
 
-	loadOBJ("moriknob.obj", &listTriangles, Material{}, true, false)
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, -10000 - Epsilon - Epsilon, 0, 0}, 10000,
-		getLambertian(getCheckerboard(Color{1, 1, 1}, Color{0.5, 0.5, 0.5}, 0.05, 0.05, 0.05)),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0.5, 0.5, 1, 0}, 0.25,
-		getEmission(getConstant(Hex(0xffffff).MulScalar(10))),
-	})
+	loadOBJ("mori3.obj", &listTriangles, Material{}, true, false)
 
 	bvh := []*BVH{}
 

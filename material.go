@@ -47,12 +47,12 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 	if m.material == Lambertian {
 		target := rec.p.Add(rec.normal).Add(RandInUnitSphere(generator))
 		*scattered = Ray{rec.p, target.Subtract(rec.p)}
-		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
+		*attenuation = m.albedo.color(rec)
 		return true
 	} else if m.material == Metal {
 		reflected := incoming.Reflection(rec.normal)
 		*scattered = Ray{rec.p, reflected.Add(RandInUnitSphere(generator).MulScalar(m.roughness))}
-		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
+		*attenuation = m.albedo.color(rec)
 		return (scattered.direction.Dot(rec.normal) > 0)
 	} else if m.material == Dielectric {
 		var outwardNormal Tuple
@@ -62,7 +62,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		var reflectProbability float64
 		var cosine float64
 
-		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
+		*attenuation = m.albedo.color(rec)
 		reflected := incoming.Reflection(rec.normal)
 
 		if incoming.Dot(rec.normal) > 0 {
@@ -102,7 +102,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		var reflectProbability float64
 		var cosine float64
 
-		*attenuation = m.albedo.color(rec.u, rec.v, rec.p)
+		*attenuation = m.albedo.color(rec)
 		reflected := incoming.Reflection(rec.normal)
 
 		if RandFloat(generator) < m.metalicity {
