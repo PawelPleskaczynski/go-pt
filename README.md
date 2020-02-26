@@ -1,12 +1,13 @@
 # go-pt
 
 This project is a Monte Carlo path tracer written in Golang that runs on CPU.
+
 ![angel](https://i.imgur.com/HOBWasb.png)
 
 ## Features
 ### Implemented
 - Parallel processing on multiple CPU cores
-- BVH trees for optimized ray-triangle intersection tests
+- BVH trees for accelerating intersection tests
 - Positionable camera with adjustable field of view and aperture
 - Materials:
     - BSDF material with adjustable properties:
@@ -19,27 +20,34 @@ This project is a Monte Carlo path tracer written in Golang that runs on CPU.
         - transmission
     - Emission material:
         - emission color
-- Partial support for OBJ files (the program can parse triangles and their normals, but for now there's no support for textures or different materials for different parts of the model)
-- Normal smoothing
+- Support for OBJ files:
+    - loading vertices, texture coordinates and normals
+    - triangle fan triangulation of polygons
+    - support for materials from MTL files
+    - support for image textures
+    - normal smoothing
 - Textures
-    - Generated textures
+    - Generated textures:
+        - checkerboard (based on UVs or coordinates)
+        - grid with variable line thickness (based on UVs or coordinates)
     - Image textures
-    - For now they only work with spheres
 ### To-do
 - Building scenes from files (probably JSON?)
 - Transformations (translation, rotation, etc.)
 - More primitives and BVH trees for them
     - Constructive solid geometry
-- Full support for OBJ files
-- Normal maps
+- Normal, specular and bump maps
 - Volumetric rendering
 - Importance sampling
 - Spectral rendering
 
 ## Example renders
-Models downloaded from Morgan McGuire's [Computer Graphics Archive](https://casual-effects.com/data).
-The Go gopher was designed by Renee French. (http://reneefrench.blogspot.com/) The gopher 3D model was made by Takuya Ueda (https://twitter.com/tenntenn).
+Some of the models downloaded from Morgan McGuire's [Computer Graphics Archive](https://casual-effects.com/data).
+The Go gopher was designed by Renee French. (http://reneefrench.blogspot.com/). The gopher 3D model was made by Takuya Ueda (https://twitter.com/tenntenn).
 
+Mori knob, with rough glass material outside, and rough metallic material with texture inside
+
+![Mori knob](https://i.imgur.com/WSRmlmt.png)
 
 Cornell box
 
