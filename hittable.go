@@ -154,7 +154,9 @@ func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 			*&rec.p = r.Position(rec.t)
 			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius).Normalize()
 			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == SphereImageUV || s.material.albedo.mode == GridUV {
-				*&rec.u, *&rec.v = s.uv(*&rec.p)
+				u, v := s.uv(*&rec.p)
+				*&rec.u, *&rec.v = u, v
+				*&rec.uT, *&rec.vT = u, v
 			}
 			*&rec.material = s.material
 			return true
@@ -165,7 +167,9 @@ func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 			*&rec.p = r.Position(rec.t)
 			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius).Normalize()
 			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == SphereImageUV || s.material.albedo.mode == GridUV {
-				*&rec.u, *&rec.v = s.uv(*&rec.p)
+				u, v := s.uv(*&rec.p)
+				*&rec.u, *&rec.v = u, v
+				*&rec.uT, *&rec.vT = u, v
 			}
 			*&rec.material = s.material
 			return true

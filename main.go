@@ -26,7 +26,7 @@ const (
 	limitTriangles = 100
 )
 
-func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
+func colorize(r Ray, world *HittableList, d int, generator rand.Rand, envMap Texture) Color {
 	rec := HitRecord{}
 	if world.hit(r, Epsilon, math.MaxFloat64, &rec) {
 		var attenuation Color
@@ -35,16 +35,18 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand) Color {
 			if rec.material.material == Emission {
 				return rec.material.albedo.color(rec)
 			} else {
-				return attenuation.Mul(colorize(scattered, world, d+1, generator))
+				return attenuation.Mul(colorize(scattered, world, d+1, generator, envMap))
 			}
 		} else {
 			return Color{0, 0, 0}
 		}
 	} else {
-		unit_direction := r.direction.Normalize()
-		t := 0.5 * (unit_direction.y + 1.0)
-		return Color{1.0, 1.0, 1.0}.MulScalar(1.0 - t).Add(Color{0.5, 0.7, 1.0}.MulScalar(t))
-		// return Color{0, 0, 0}
+		if envMap.mode == SphereImageUV {
+			d := r.direction.Normalize()
+			rec.uT = 0.5 - (math.Atan2(d.z, d.x))/(2*math.Pi)*-1
+			rec.vT = 0.5 + (math.Asin(d.y))/(math.Pi)*-1
+		}
+		return envMap.color(rec)
 	}
 }
 
@@ -129,14 +131,8 @@ func loadMaterial(file *os.File, name string) Material {
 						}
 						if text[0] == "map_Kd" {
 							if fileExists(text[1]) {
-								textureFile, _ := os.Open(text[1])
-								var texture image.Image
-								if strings.HasSuffix(strings.ToLower(text[1]), "png") {
-									texture, _ = png.Decode(textureFile)
-								} else if strings.HasSuffix(strings.ToLower(text[1]), "jpg") || strings.HasSuffix(strings.ToLower(text[1]), "jpeg") {
-									texture, _ = jpeg.Decode(textureFile)
-								}
-								material.albedo.texture = loadTexture(texture)
+								texture := loadTexture(loadImage(text[1]))
+								material.albedo.texture = texture
 								material.albedo.mode = TriangleImageUV
 							}
 						}
@@ -527,6 +523,19 @@ func getBVHSphere(spheres []Sphere, depth, x int) *BVHSphere {
 	}
 }
 
+func loadImage(path string) image.Image {
+	var texture image.Image
+	if fileExists(path) {
+		textureFile, _ := os.Open(path)
+		if strings.HasSuffix(strings.ToLower(path), "png") {
+			texture, _ = png.Decode(textureFile)
+		} else if strings.HasSuffix(strings.ToLower(path), "jpg") || strings.HasSuffix(strings.ToLower(path), "jpeg") {
+			texture, _ = jpeg.Decode(textureFile)
+		}
+	}
+	return texture
+}
+
 func loadTexture(texture image.Image) [][]Color {
 	width := texture.Bounds().Dx()
 	height := texture.Bounds().Dy()
@@ -554,14 +563,43 @@ func main() {
 	averageSampleTime := time.Duration(0.0)
 	numTris := 0
 
-	cameraPosition := Tuple{0.5, 0.5, 1.5, 0}
-	cameraDirection := Tuple{0, 0, 0, 0}
-	// cameraPosition := Tuple{2, 1, 2, 0}
-	// cameraDirection := Tuple{0, 0.5, 0, 0}
+	cameraDirection := Tuple{0, 1, 0, 0}
+	cameraPosition := Tuple{2, 1.2, -4, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 70, float64(hsize)/float64(vsize), 0.05, focusDistance)
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.0, focusDistance)
 
-	loadOBJ("mori3.obj", &listTriangles, Material{}, true, false)
+	loadOBJ("wine.obj", &listTriangles, getDielectric(getConstant(Hex(0xb11226)), 0, 0.5, 1.3), true, false)
+	loadOBJ("wineglass.obj", &listTriangles, getDielectric(getConstant(Hex(0xffffff)), 0, 0, 1.5), true, false)
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0.5, 2, 0.5, 0}, 0.25,
+		getEmission(getConstant(Hex(0xffffff).MulScalar(20))),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0.5, 0.25, 0.5, 0}, 0.25,
+		getDielectric(getConstant(Hex(0xffffff)), 0, 0.5, 1.45),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{-0.5, 0.25, 0.5, 0}, 0.25,
+		getDiffuse(getCheckerboardUV(Hex(0xffffff), Hex(0), 0.25/2, 0.5/2), 0, 1),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0.5, 0.25, -0.5, 0}, 0.25,
+		getLambertian(getConstant(Hex(0xffffff))),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{-0.5, 0.25, -0.5, 0}, 0.25,
+		getMetal(getConstant(Hex(0xffffff)), 0),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, -10000, 0, 0}, 10000,
+		getLambertian(getGrid(Hex(0), Hex(0xffffff), 0.5, 0.5, 0.5, 0.01)),
+	})
 
 	bvh := []*BVH{}
 
@@ -602,6 +640,9 @@ func main() {
 
 	doneSamples := 0
 
+	path := "map.png"
+	envMap := getImageUV(loadTexture(loadImage(path)))
+
 	log.Printf("Rendering %d objects (%d triangles) and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), numTris, len(listSpheres), hsize, vsize, samples, cpus)
 
 	for i := 0; i < cpus; i++ {
@@ -617,7 +658,7 @@ func main() {
 						v := (float64(y) + RandFloat(*generator)) / float64(vsize)
 						r := camera.getRay(u, v, *generator)
 
-						col = colorize(r, &world, 0, *generator)
+						col = colorize(r, &world, 0, *generator, envMap)
 
 						buf[i][y*hsize+x] = buf[i][y*hsize+x].Add(col)
 					}
@@ -654,7 +695,7 @@ func main() {
 						v := (float64(y) + RandFloat(*generator)) / float64(vsize)
 						r := camera.getRay(u, v, *generator)
 
-						col = colorize(r, &world, 0, *generator)
+						col = colorize(r, &world, 0, *generator, envMap)
 
 						buf[i][y*hsize+x] = buf[i][y*hsize+x].Add(col)
 					}
@@ -695,5 +736,5 @@ func main() {
 	// filename := fmt.Sprintf("frame_%d.ppm", 0)
 	filename := fmt.Sprintf("frame_%d", time.Now().UnixNano()/1e6)
 
-	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 16)
+	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 16, true)
 }

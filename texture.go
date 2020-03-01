@@ -54,7 +54,7 @@ func (t Texture) color(rec HitRecord) Color {
 		}
 		return t.c[1]
 	} else if t.mode == CheckerboardUV {
-		if (int(math.Floor(rec.u/t.scaleX))+int(math.Floor(rec.v/t.scaleY)))%2 == 0 {
+		if (int(math.Floor(rec.uT/t.scaleX))+int(math.Floor(rec.vT/t.scaleY)))%2 == 0 {
 			return t.c[0]
 		}
 		return t.c[1]
@@ -64,15 +64,15 @@ func (t Texture) color(rec HitRecord) Color {
 		}
 		return t.c[1]
 	} else if t.mode == GridUV {
-		if (rec.u/t.scaleX-math.Floor(rec.u/t.scaleX)) < t.width || (rec.v/t.scaleY-math.Floor(rec.v/t.scaleY)) < t.width {
+		if (rec.uT/t.scaleX-math.Floor(rec.uT/t.scaleX)) < t.width || (rec.vT/t.scaleY-math.Floor(rec.vT/t.scaleY)) < t.width {
 			return t.c[0]
 		}
 		return t.c[1]
 	} else if t.mode == SphereImageUV {
 		nx := float64(len(t.texture))
 		ny := float64(len(t.texture[0]))
-		i := rec.u * nx
-		j := rec.v*ny - 0.001
+		i := rec.uT * nx
+		j := rec.vT*ny - 0.001
 		if i < 0 {
 			i = 0
 		}
