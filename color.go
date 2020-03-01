@@ -33,3 +33,14 @@ func (c Color) Mul(c1 Color) Color {
 func Hex(c int) Color {
 	return Color{float64(c>>16&0xff) / 255, float64(c>>8&0xff) / 255, float64(c&0xff) / 255}
 }
+
+func (c Color) Luminance() float64 {
+	return c.r*0.2126 +
+		c.g*0.7152 +
+		c.b*0.0722
+}
+
+func (cIn Color) changeLuminance(lOut float64) Color {
+	lIn := cIn.Luminance()
+	return cIn.MulScalar(lOut / lIn)
+}

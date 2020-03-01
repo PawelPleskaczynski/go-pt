@@ -22,7 +22,28 @@ func check(e error) {
 	}
 }
 
-func SaveImage(canvas []Color, width, height, maxValue int, fileName string, extension int, depth int) {
+func SaveImage(canvas []Color, width, height, maxValue int, fileName string, extension int, depth int, toneMapping bool) {
+	maxLum := 0.0
+	if toneMapping {
+		for y := height - 1; y >= 0; y-- {
+			for x := 0; x < width; x++ {
+				if canvas[y*width+x].Luminance() > maxLum {
+					maxLum = canvas[y*width+x].Luminance()
+				}
+			}
+		}
+
+		for y := height - 1; y >= 0; y-- {
+			for x := 0; x < width; x++ {
+				c := canvas[y*width+x]
+				lOld := c.Luminance()
+				numerator := lOld * (1.0 + (lOld / (maxLum * maxLum)))
+				lNew := numerator / (1.0 + lOld)
+				canvas[y*width+x] = c.changeLuminance(lNew)
+			}
+		}
+	}
+
 	for y := height - 1; y >= 0; y-- {
 		for x := 0; x < width; x++ {
 			if canvas[y*width+x].r > 1.0 {
