@@ -151,7 +151,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		}
 
 		if incoming.Refraction(outwardNormal, niOverNt, &refracted) {
-			reflectProbability = Schlick(cosine, m.ior) + m.specularity/4
+			reflectProbability = Schlick(cosine, m.ior)*m.specularity/4 + m.specularity/4
 			if reflectProbability > 1.0 {
 				reflectProbability = 1.0
 			}
