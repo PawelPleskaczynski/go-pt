@@ -153,10 +153,12 @@ func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 			*&rec.t = temp
 			*&rec.p = r.Position(rec.t)
 			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius).Normalize()
-			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == SphereImageUV || s.material.albedo.mode == GridUV {
-				u, v := s.uv(*&rec.p)
-				*&rec.u, *&rec.v = u, v
-				*&rec.uT, *&rec.vT = u, v
+			u, v := s.uv(*&rec.p)
+			*&rec.u, *&rec.v = u, v
+			*&rec.uT, *&rec.vT = u, v
+			if len(s.material.albedo.normalTexture) > 0 {
+				uvw := buildFromW(rec.normal)
+				*&rec.normal = uvw.local(s.material.albedo.normal(*rec)).Normalize()
 			}
 			*&rec.material = s.material
 			return true
@@ -166,10 +168,12 @@ func (s *Sphere) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 			*&rec.t = temp
 			*&rec.p = r.Position(rec.t)
 			*&rec.normal = (rec.p.Subtract(s.origin)).DivScalar(s.radius).Normalize()
-			if s.material.albedo.mode == CheckerboardUV || s.material.albedo.mode == SphereImageUV || s.material.albedo.mode == GridUV {
-				u, v := s.uv(*&rec.p)
-				*&rec.u, *&rec.v = u, v
-				*&rec.uT, *&rec.vT = u, v
+			u, v := s.uv(*&rec.p)
+			*&rec.u, *&rec.v = u, v
+			*&rec.uT, *&rec.vT = u, v
+			if len(s.material.albedo.normalTexture) > 0 {
+				uvw := buildFromW(rec.normal)
+				*&rec.normal = uvw.local(s.material.albedo.normal(*rec)).Normalize()
 			}
 			*&rec.material = s.material
 			return true
@@ -208,7 +212,7 @@ func (tri *Triangle) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 		*&rec.u = u
 		*&rec.v = v
 
-		if tri.material.albedo.mode == TriangleImageUV {
+		if tri.material.albedo.mode == TriangleImageUV || len(tri.material.albedo.normalTexture) > 0 {
 			vt1 := tri.vtexture.vertex0
 			vt2 := tri.vtexture.vertex1
 			vt3 := tri.vtexture.vertex2
@@ -224,6 +228,11 @@ func (tri *Triangle) hit(r Ray, tMin, tMax float64, rec *HitRecord) bool {
 			*&rec.normal = vn2.MulScalar(u).Add(vn3.MulScalar(v)).Add(vn1.MulScalar(1 - u - v))
 		} else {
 			*&rec.normal = tri.normal
+		}
+
+		if len(tri.material.albedo.normalTexture) > 0 {
+			uvw := buildFromW(rec.normal)
+			*&rec.normal = uvw.local(tri.material.albedo.normal(*rec))
 		}
 		return true
 	}

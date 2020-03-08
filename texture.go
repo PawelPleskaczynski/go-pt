@@ -18,31 +18,77 @@ type Texture struct {
 	c                             []Color
 	scaleX, scaleY, scaleZ, width float64
 	mode                          int
-	texture                       [][]Color
+	diffuseTexture                [][]Color
+	normalTexture                 [][]Color
 }
 
 func getConstant(c Color) Texture {
-	return Texture{[]Color{c}, 0, 0, 0, 0, Constant, nil}
+	return Texture{[]Color{c}, 0, 0, 0, 0, Constant, nil, nil}
 }
 
 func getCheckerboard(c1, c2 Color, scaleX, scaleY, scaleZ float64) Texture {
-	return Texture{[]Color{c1, c2}, scaleX, scaleY, scaleZ, 0, Checkerboard, nil}
+	return Texture{[]Color{c1, c2}, scaleX, scaleY, scaleZ, 0, Checkerboard, nil, nil}
 }
 
 func getCheckerboardUV(c1, c2 Color, scaleU, scaleV float64) Texture {
-	return Texture{[]Color{c1, c2}, scaleU, scaleV, 0, 0, CheckerboardUV, nil}
+	return Texture{[]Color{c1, c2}, scaleU, scaleV, 0, 0, CheckerboardUV, nil, nil}
 }
 
 func getGrid(c1, c2 Color, scaleX, scaleY, scaleZ, width float64) Texture {
-	return Texture{[]Color{c1, c2}, scaleX, scaleY, scaleZ, width, Grid, nil}
+	return Texture{[]Color{c1, c2}, scaleX, scaleY, scaleZ, width, Grid, nil, nil}
 }
 
 func getGridUV(c1, c2 Color, scaleU, scaleV, width float64) Texture {
-	return Texture{[]Color{c1, c2}, scaleU, scaleV, 0, width, GridUV, nil}
+	return Texture{[]Color{c1, c2}, scaleU, scaleV, 0, width, GridUV, nil, nil}
 }
 
 func getImageUV(texture [][]Color) Texture {
-	return Texture{nil, 0, 0, 0, 0, SphereImageUV, texture}
+	return Texture{nil, 0, 0, 0, 0, SphereImageUV, texture, nil}
+}
+
+func getDiffNormalUV(diffuse, normal [][]Color) Texture {
+	return Texture{nil, 0, 0, 0, 0, SphereImageUV, diffuse, normal}
+}
+
+func (t Texture) normal(rec HitRecord) Tuple {
+	if t.mode == SphereImageUV {
+		nx := float64(len(t.normalTexture))
+		ny := float64(len(t.normalTexture[0]))
+		i := rec.uT * nx
+		j := rec.vT*ny - 0.001
+		if i < 0 {
+			i = 0
+		}
+		if j < 0 {
+			j = 0
+		}
+		if i > nx-1 {
+			i = nx - 1
+		}
+		if j > ny-1 {
+			j = ny - 1
+		}
+		pixel := t.normalTexture[int(i)][int(j)]
+		return Tuple{pixel.r, pixel.g, pixel.b, 1}.MulScalar(2).AddScalar(-1).Normalize()
+	}
+	nx := float64(len(t.normalTexture))
+	ny := float64(len(t.normalTexture[0]))
+	i := rec.uT * nx
+	j := ny - rec.vT*ny - 0.001
+	if i < 0 {
+		i = 0
+	}
+	if j < 0 {
+		j = 0
+	}
+	if i > nx-1 {
+		i = nx - 1
+	}
+	if j > ny-1 {
+		j = ny - 1
+	}
+	pixel := t.normalTexture[int(i)][int(j)]
+	return Tuple{pixel.r, pixel.g, pixel.b, 1}.MulScalar(2).AddScalar(-1).Normalize()
 }
 
 func (t Texture) color(rec HitRecord) Color {
@@ -69,8 +115,8 @@ func (t Texture) color(rec HitRecord) Color {
 		}
 		return t.c[1]
 	} else if t.mode == SphereImageUV {
-		nx := float64(len(t.texture))
-		ny := float64(len(t.texture[0]))
+		nx := float64(len(t.diffuseTexture))
+		ny := float64(len(t.diffuseTexture[0]))
 		i := rec.uT * nx
 		j := rec.vT*ny - 0.001
 		if i < 0 {
@@ -85,10 +131,13 @@ func (t Texture) color(rec HitRecord) Color {
 		if j > ny-1 {
 			j = ny - 1
 		}
-		return t.texture[int(i)][int(j)]
+		if math.IsNaN(i) || math.IsNaN(j) || math.IsNaN(nx) || math.IsNaN(ny) {
+			return Color{}
+		}
+		return t.diffuseTexture[int(i)][int(j)]
 	} else if t.mode == TriangleImageUV {
-		nx := float64(len(t.texture))
-		ny := float64(len(t.texture[0]))
+		nx := float64(len(t.diffuseTexture))
+		ny := float64(len(t.diffuseTexture[0]))
 		i := rec.uT * nx
 		j := ny - rec.vT*ny - 0.001
 		if i < 0 {
@@ -103,7 +152,10 @@ func (t Texture) color(rec HitRecord) Color {
 		if j > ny-1 {
 			j = ny - 1
 		}
-		return t.texture[int(i)][int(j)]
+		if math.IsNaN(i) || math.IsNaN(j) || math.IsNaN(nx) || math.IsNaN(ny) {
+			return Color{}
+		}
+		return t.diffuseTexture[int(i)][int(j)]
 	}
 	return Color{}
 }

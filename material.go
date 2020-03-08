@@ -141,9 +141,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		}
 
 		if incoming.Dot(rec.normal) > 0 {
-			outwardNormal = rec.normal.MulScalar(-1)
-			niOverNt = m.ior
-			cosine = 1 * incoming.Dot(rec.normal) / incoming.Magnitude()
+			return true
 		} else {
 			outwardNormal = rec.normal
 			niOverNt = 1.0 / m.ior

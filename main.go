@@ -132,8 +132,14 @@ func loadMaterial(file *os.File, name string) Material {
 						if text[0] == "map_Kd" {
 							if fileExists(text[1]) {
 								texture := loadTexture(loadImage(text[1]))
-								material.albedo.texture = texture
+								material.albedo.diffuseTexture = texture
 								material.albedo.mode = TriangleImageUV
+							}
+						}
+						if text[0] == "map_Bump" || text[0] == "map_bump" || text[0] == "bump" {
+							if fileExists(text[1]) {
+								texture := loadTexture(loadImage(text[1]))
+								material.albedo.normalTexture = texture
 							}
 						}
 					}
@@ -141,7 +147,6 @@ func loadMaterial(file *os.File, name string) Material {
 			}
 		}
 	}
-
 	return material
 }
 
@@ -736,5 +741,5 @@ func main() {
 	// filename := fmt.Sprintf("frame_%d.ppm", 0)
 	filename := fmt.Sprintf("frame_%d", time.Now().UnixNano()/1e6)
 
-	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 16, true)
+	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 16, false)
 }
