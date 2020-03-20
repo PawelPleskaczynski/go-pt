@@ -20,7 +20,7 @@ import (
 
 const (
 	hsize          = 256
-	vsize          = 128
+	vsize          = 256
 	samples        = 128
 	depth          = 8
 	limitTriangles = 100
@@ -420,15 +420,18 @@ func getBVH(triangles []Triangle, depth, x int) *BVH {
 	if x > 2 {
 		x = 0
 	}
-	if x == 0 {
+	currentBox := getBoundingBox(triangles)
+	lenX, lenY, lenZ := currentBox.sizeX(), currentBox.sizeY(), currentBox.sizeZ()
+	maxLen := max3(lenX, lenY, lenZ)
+	if maxLen == lenX {
 		sort.Slice(triangles[:], func(i, j int) bool {
 			return triangles[i].position.vertex0.x < triangles[j].position.vertex0.x
 		})
-	} else if x == 1 {
+	} else if maxLen == lenY {
 		sort.Slice(triangles[:], func(i, j int) bool {
 			return triangles[i].position.vertex0.y < triangles[j].position.vertex0.y
 		})
-	} else if x == 2 {
+	} else if maxLen == lenZ {
 		sort.Slice(triangles[:], func(i, j int) bool {
 			return triangles[i].position.vertex0.z < triangles[j].position.vertex0.z
 		})
@@ -568,43 +571,15 @@ func main() {
 	averageSampleTime := time.Duration(0.0)
 	numTris := 0
 
+	cameraPosition := Tuple{4, 1, 0, 0}
 	cameraDirection := Tuple{0, 1, 0, 0}
-	cameraPosition := Tuple{2, 1.2, -4, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.0, focusDistance)
 
-	loadOBJ("wine.obj", &listTriangles, getDielectric(getConstant(Hex(0xb11226)), 0, 0.5, 1.3), true, false)
-	loadOBJ("wineglass.obj", &listTriangles, getDielectric(getConstant(Hex(0xffffff)), 0, 0, 1.5), true, false)
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0.5, 2, 0.5, 0}, 0.25,
-		getEmission(getConstant(Hex(0xffffff).MulScalar(20))),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0.5, 0.25, 0.5, 0}, 0.25,
-		getDielectric(getConstant(Hex(0xffffff)), 0, 0.5, 1.45),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-0.5, 0.25, 0.5, 0}, 0.25,
-		getDiffuse(getCheckerboardUV(Hex(0xffffff), Hex(0), 0.25/2, 0.5/2), 0, 1),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0.5, 0.25, -0.5, 0}, 0.25,
-		getLambertian(getConstant(Hex(0xffffff))),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-0.5, 0.25, -0.5, 0}, 0.25,
-		getMetal(getConstant(Hex(0xffffff)), 0),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, -10000, 0, 0}, 10000,
-		getLambertian(getGrid(Hex(0), Hex(0xffffff), 0.5, 0.5, 0.5, 0.01)),
-	})
+	loadOBJ("cornellbox_objects_final.obj", &listTriangles, getLambertian(getConstant(Hex(0))), true, false)
+	loadOBJ("cornellbox_light_top.obj", &listTriangles, getEmission(getConstant(Hex(0xffd1a3).MulScalar(5))), false, true)
+	loadOBJ("cornellbox_light_bottom.obj", &listTriangles, getEmission(getConstant(Hex(0xffffff))), false, true)
+	loadOBJ("cornellbox_floor.obj", &listTriangles, getDiffuse(getCheckerboard(Color{1, 1, 1}, Color{0.5, 0.5, 0.5}, 0.125, 0.125, 0.125), 0.1, 0.15), false, true)
 
 	bvh := []*BVH{}
 
@@ -645,8 +620,7 @@ func main() {
 
 	doneSamples := 0
 
-	path := "map.png"
-	envMap := getImageUV(loadTexture(loadImage(path)))
+	envMap := getConstant(Hex(0))
 
 	log.Printf("Rendering %d objects (%d triangles) and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), numTris, len(listSpheres), hsize, vsize, samples, cpus)
 

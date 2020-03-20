@@ -267,3 +267,15 @@ func (box *AABB) hit(r Ray, tMin, tMax float64) bool {
 
 	return true
 }
+
+func (box *AABB) sizeX() float64 {
+	return math.Abs(box.max.x - box.min.x)
+}
+
+func (box *AABB) sizeY() float64 {
+	return math.Abs(box.max.y - box.min.y)
+}
+
+func (box *AABB) sizeZ() float64 {
+	return math.Abs(box.max.z - box.min.z)
+}
