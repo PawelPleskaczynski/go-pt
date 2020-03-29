@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	_ "github.com/mdouchement/hdr/codec/rgbe"
 )
 
 const (
@@ -539,6 +541,10 @@ func loadImage(path string) image.Image {
 			texture, _ = png.Decode(textureFile)
 		} else if strings.HasSuffix(strings.ToLower(path), "jpg") || strings.HasSuffix(strings.ToLower(path), "jpeg") {
 			texture, _ = jpeg.Decode(textureFile)
+		} else if strings.HasSuffix(strings.ToLower(path), "hdr") {
+			texture, _, err := image.Decode(textureFile)
+			check(err)
+			return texture
 		}
 	}
 	return texture
@@ -569,25 +575,50 @@ func main() {
 
 	averageFrameTime := time.Duration(0.0)
 	averageSampleTime := time.Duration(0.0)
-	numTris := 0
+	numTris, done := 0, 0
 
-	cameraPosition := Tuple{4, 1, 0, 0}
-	cameraDirection := Tuple{0, 1, 0, 0}
+	cameraPosition := Tuple{5, 1, 0, 0}
+	cameraDirection := Tuple{0, 0.5, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.0, focusDistance)
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.05, focusDistance)
 
-	loadOBJ("cornellbox_objects_final.obj", &listTriangles, getLambertian(getConstant(Hex(0))), true, false)
-	loadOBJ("cornellbox_light_top.obj", &listTriangles, getEmission(getConstant(Hex(0xffd1a3).MulScalar(5))), false, true)
-	loadOBJ("cornellbox_light_bottom.obj", &listTriangles, getEmission(getConstant(Hex(0xffffff))), false, true)
-	loadOBJ("cornellbox_floor.obj", &listTriangles, getDiffuse(getCheckerboard(Color{1, 1, 1}, Color{0.5, 0.5, 0.5}, 0.125, 0.125, 0.125), 0.1, 0.15), false, true)
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, -10000, 0, 0}, 10000,
+		getLambertian(getCheckerboard(Hex(0x474747), Hex(0x696969), 0.5, 0.5, 0.5)),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, 0.5, -1.8, 0}, 0.5,
+		getDiffuse(getDiffNormalUV(loadTexture(loadImage("bricks_0013_base_color_2k.png")), loadTexture(loadImage("bricks_0013_normal_2k.png"))), 0, 1),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, 0.5, -0.6, 0}, 0.5,
+		getLambertian(getDiffNormalUV(loadTexture(loadImage("old_planks_02_diff_1k.png")), loadTexture(loadImage("old_planks_02_nor_1k.png")))),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, 0.5, 0.6, 0}, 0.5,
+		getMetal(getDiffNormalUV(loadTexture(loadImage("metal_000_diffuse_2k.png")), loadTexture(loadImage("metal_0009_normal_2k.png"))), 0.5),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, 0.5, 1.8, 0}, 0.5,
+		getDielectric(getConstant(Hex(0xffffff)), 0, 0.5, 1.45),
+	})
 
 	bvh := []*BVH{}
 
 	log.Println("Building BVHs...")
 	for i := 0; i < len(listTriangles); i++ {
-		bvh = append(bvh, getBVH(listTriangles[i], 24, 0))
 		numTris += len(listTriangles[i])
 	}
+	for i := 0; i < len(listTriangles); i++ {
+		bvh = append(bvh, getBVH(listTriangles[i], 24, 0))
+		done += len(listTriangles[i])
+		fmt.Printf("\r%.2f%% (%d/%d triangles, %d/%d objects)", float64(done)/float64(numTris)*100, done, numTris, i+1, len(listTriangles))
+	}
+	println("")
 	sphereBVH := getBVHSphere(listSpheres, 0, 0)
 	log.Println("Built BVHs")
 
@@ -620,7 +651,7 @@ func main() {
 
 	doneSamples := 0
 
-	envMap := getConstant(Hex(0))
+	envMap := getImageUV(loadTexture(loadImage("river.hdr")))
 
 	log.Printf("Rendering %d objects (%d triangles) and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), numTris, len(listSpheres), hsize, vsize, samples, cpus)
 
@@ -715,5 +746,5 @@ func main() {
 	// filename := fmt.Sprintf("frame_%d.ppm", 0)
 	filename := fmt.Sprintf("frame_%d", time.Now().UnixNano()/1e6)
 
-	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 16, false)
+	SaveImage(canvas, hsize, vsize, 255, filename, PNG, 16, true)
 }
