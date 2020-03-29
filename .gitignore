@@ -1,5 +1,8 @@
 *.png
 *.ppm
+*.jpg
+*.jpeg
+*.hdr
 *.obj
 *.mtl
 test/
