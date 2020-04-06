@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	hsize          = 256
-	vsize          = 256
-	samples        = 128
+	hsize          = 768
+	vsize          = 512
+	samples        = 2048
 	depth          = 8
 	limitTriangles = 100
 )
@@ -577,10 +577,12 @@ func main() {
 	averageSampleTime := time.Duration(0.0)
 	numTris, done := 0, 0
 
-	cameraPosition := Tuple{5, 1, 0, 0}
+	cameraPosition := Tuple{0, 0.5, 3, 0}
 	cameraDirection := Tuple{0, 0.5, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, 37, float64(hsize)/float64(vsize), 0.05, focusDistance)
+	fLength := 20.0 // mm
+	fNumber := 0.1
+	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, fLength, float64(hsize)/float64(vsize), fNumber, focusDistance)
 
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{0, -10000, 0, 0}, 10000,
@@ -588,22 +590,7 @@ func main() {
 	})
 
 	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, 0.5, -1.8, 0}, 0.5,
-		getDiffuse(getDiffNormalUV(loadTexture(loadImage("bricks_0013_base_color_2k.png")), loadTexture(loadImage("bricks_0013_normal_2k.png"))), 0, 1),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, 0.5, -0.6, 0}, 0.5,
-		getLambertian(getDiffNormalUV(loadTexture(loadImage("old_planks_02_diff_1k.png")), loadTexture(loadImage("old_planks_02_nor_1k.png")))),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, 0.5, 0.6, 0}, 0.5,
-		getMetal(getDiffNormalUV(loadTexture(loadImage("metal_000_diffuse_2k.png")), loadTexture(loadImage("metal_0009_normal_2k.png"))), 0.5),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, 0.5, 1.8, 0}, 0.5,
+		Tuple{0, 0.5, 0, 0}, 0.5,
 		getDielectric(getConstant(Hex(0xffffff)), 0, 0.5, 1.45),
 	})
 

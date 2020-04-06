@@ -21,10 +21,11 @@ func randomDisk(generator rand.Rand) Tuple {
 	return p
 }
 
-func getCamera(lookFrom, lookAt, up Tuple, fov, aspect, aperture, focusDistance float64) Camera {
+func getCamera(lookFrom, lookAt, up Tuple, fLength, aspect, fNumber, focusDistance float64) Camera {
 	var c Camera
+	aperture := (fLength / 1000) / fNumber
 	c.lensRadius = aperture / 2
-	theta := fov * math.Pi / 180
+	theta := 2 * math.Atan(24/(2*fLength))
 	halfHeight := math.Tan(theta / 2)
 	halfWidth := aspect * halfHeight
 	c.origin = lookFrom
