@@ -148,8 +148,28 @@ func (v Tuple) Refraction(n Tuple, niOverNt float64, refracted *Tuple) bool {
 	return true
 }
 
+func (a Tuple) Lerp(b Tuple, t float64) Tuple {
+	return a.MulScalar(t).Add(b.MulScalar(1.0 - t))
+}
+
 func Schlick(cos, ior float64) float64 {
 	r0 := (1.0 - ior) / (1.0 + ior)
 	r0 = r0 * r0
 	return r0 + (1.0-r0)*math.Pow(1-cos, 5)
+}
+
+func Fresnel(n1, n2 float64, normal, incident Tuple) float64 {
+	r0 := (n1 - n2) / (n1 + n2)
+	r0 *= r0
+	cosX := -normal.Dot(incident)
+	if n1 > n2 {
+		n := n1 / n2
+		sinT2 := n * n * (1.0 - cosX*cosX)
+		if sinT2 > 1.0 {
+			return 1.0
+		}
+		cosX = math.Sqrt(1.0 - sinT2)
+	}
+	x := 1.0 - cosX
+	return r0 + (1.0-r0)*x*x*x*x*x
 }
