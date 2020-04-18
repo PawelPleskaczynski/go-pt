@@ -8,6 +8,10 @@ func RandFloat(generator rand.Rand) float64 {
 	return generator.Float64()
 }
 
+func RandFloatRange(min, max float64, generator rand.Rand) float64 {
+	return min + generator.Float64()*(max-min)
+}
+
 func RandInUnitSphere(generator rand.Rand) Tuple {
 	p := Tuple{0, 0, 0, 0}
 	for {

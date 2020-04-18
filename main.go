@@ -577,21 +577,60 @@ func main() {
 	averageSampleTime := time.Duration(0.0)
 	numTris, done := 0, 0
 
-	cameraPosition := Tuple{0, 0.5, 3, 0}
+	// cameraPosition := Tuple{0, 2, 7, 0}
+	// cameraDirection := Tuple{0, 0.5, 0, 0}
+	// focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
+	// fLength := 10.0 // mm
+	// fNumber := 128.0
+
+	cameraPosition := Tuple{0, 0.5, 7, 0}
 	cameraDirection := Tuple{0, 0.5, 0, 0}
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	fLength := 20.0 // mm
-	fNumber := 0.1
+	fLength := 50.0 // mm
+	fNumber := 128.0
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, fLength, float64(hsize)/float64(vsize), fNumber, focusDistance)
 
 	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, -10000, 0, 0}, 10000,
-		getLambertian(getCheckerboard(Hex(0x474747), Hex(0x696969), 0.5, 0.5, 0.5)),
+		Tuple{0, -1000000, 0, 0}, 1000000,
+		getDiffuse(getConstant(Hex(0x24092E)), 0.2, 0),
 	})
 
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{0, 0.5, 0, 0}, 0.5,
-		getDielectric(getConstant(Hex(0xffffff)), 0, 0.5, 1.45),
+		getDielectric(getConstant(Hex(0x9BF2FF)), 0.2, 1, 1.45),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{1, 0.5, 0, 0}, 0.5,
+		getDiffuse(getConstant(Hex(0x000000)), 0.75, 0),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{-1, 0.5, 0, 0}, 0.5,
+		getDiffuse(getConstant(Hex(0x456300)), 0.2, .05),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, 1.5, 0, 0}, 0.5,
+		getDiffuse(getConstant(Hex(0xFF9B00)), 0.0, 1),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{1, 1.5, 0, 0}, 0.5,
+		Material{
+			BSDF,
+			getConstant(Hex(0xffffff)),
+			0.2,
+			1.5,
+			1.0,
+			0.5,
+			0.0,
+		},
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{-1, 1.5, 0, 0}, 0.5,
+		getMetal(getConstant(Hex(0xffffff)), 0.15),
 	})
 
 	bvh := []*BVH{}
@@ -638,7 +677,8 @@ func main() {
 
 	doneSamples := 0
 
-	envMap := getImageUV(loadTexture(loadImage("river.hdr")))
+	// envMap := getConstant(Hex(0xffffff))
+	envMap := getImageUV(loadTexture(loadImage("park.hdr")))
 
 	log.Printf("Rendering %d objects (%d triangles) and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), numTris, len(listSpheres), hsize, vsize, samples, cpus)
 
