@@ -592,7 +592,7 @@ func main() {
 
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{0, -1000000, 0, 0}, 1000000,
-		getDiffuse(getConstant(Hex(0x24092E)), 0.2, 0),
+		getDiffuse(getConstant(Hex(0x24092E)), 0.2, 0.05),
 	})
 
 	listSpheres = append(listSpheres, Sphere{
@@ -602,7 +602,7 @@ func main() {
 
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{1, 0.5, 0, 0}, 0.5,
-		getDiffuse(getConstant(Hex(0x000000)), 0.75, 0),
+		getDiffuse(getConstant(Hex(0x000000)), 0.75, 0.025),
 	})
 
 	listSpheres = append(listSpheres, Sphere{
@@ -677,6 +677,7 @@ func main() {
 
 	doneSamples := 0
 
+	// envMap := getConstant(Hex(0))
 	// envMap := getConstant(Hex(0xffffff))
 	envMap := getImageUV(loadTexture(loadImage("park.hdr")))
 

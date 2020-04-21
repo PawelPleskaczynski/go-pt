@@ -129,7 +129,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 			return (scattered.direction.Dot(rec.normal) > 0)
 		}
 
-		specularity := rec.material.specularity / 4
+		specularity := math.Pow(rec.material.specularity, 1/2.2)
 
 		if RandFloat(generator) <= m.transmission {
 			if incoming.Dot(rec.normal) > 0 {
@@ -144,7 +144,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 
 			if incoming.Refraction(outwardNormal, niOverNt, &refracted) {
 				reflectProbability = Schlick(cosine, m.ior)
-				reflectProbability = (specularity + (1.0-specularity)*reflectProbability)
+				reflectProbability = specularity * reflectProbability
 				if reflectProbability > 1.0 {
 					reflectProbability = 1.0
 				}
@@ -154,7 +154,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 
 			if RandFloat(generator) <= reflectProbability {
 				*scattered = Ray{rec.p, reflected}
-				*attenuation = Color{reflectProbability, reflectProbability, reflectProbability}
+				*attenuation = Color{1, 1, 1}
 			} else {
 				*scattered = Ray{rec.p, refracted}
 			}
@@ -173,11 +173,11 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		}
 
 		reflectProbability = Fresnel(n1, n2, rec.normal, incoming) * (1 - phi)
-		reflectProbability = (specularity + (1.0-specularity)*reflectProbability)
+		reflectProbability = specularity * reflectProbability
 
 		if RandFloat(generator) <= reflectProbability {
 			*scattered = Ray{rec.p, reflected}
-			*attenuation = Color{reflectProbability, reflectProbability, reflectProbability}
+			*attenuation = Color{1, 1, 1}
 		} else {
 			target := rec.p.Add(rec.normal).Add(RandInUnitSphere(generator))
 			*scattered = Ray{rec.p, target.Subtract(rec.p)}
