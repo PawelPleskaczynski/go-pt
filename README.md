@@ -2,20 +2,20 @@
 
 This project is a Monte Carlo path tracer written in Golang that runs on CPU.
 
-![angel](https://i.imgur.com/HOBWasb.png)
+![Monkeys](https://i.imgur.com/t7qnzOA.png)
 
 ## Features
 ### Implemented
 - Parallel processing on multiple CPU cores
 - BVH trees for accelerating intersection tests
-- Positionable camera with adjustable field of view and aperture
+- Positionable camera with adjustable focal length and aperture
 - Materials:
-    - BSDF material with adjustable properties:
+    - universal material with adjustable properties:
         - albedo:
             - texture or color
-        - roughness:
+        - roughness (GGX microfacet model)
         - index of refraction
-        - specularity
+        - specularity (amount of clearcoat)
         - metalicity
         - transmission
     - Emission material:
@@ -86,29 +86,21 @@ The gopher 3D model was made by Takuya Ueda (https://twitter.com/tenntenn).
 HDRI image used in one of the examples was downloaded from [HDRI Haven](https://hdrihaven.com/hdri/?h=river_walk_1).
 Textures used in one of the examples were downloaded from [TextureCan](https://www.texturecan.com/) and [Texture Haven](https://texturehaven.com/).
 
+Mori knobs - rough copper, rough glass, glossy plastic
+
+![Mori knobs](https://i.imgur.com/ZKOIb0V.png)
+
+Render of a scene with materials with different level on roughness from my path tracer on the left and reference render from Blender on the right
+
+![Comparison](https://i.imgur.com/vzurrgh.png)
+
 Four spheres with different textures and materials with HDRI environment map
 
 ![HDRI example](https://i.imgur.com/RAUVu5I.png)
 
-Mori knob, with rough glass material outside, and rough metallic material with texture inside
+Cornell box with mirror box
 
-![Mori knob](https://i.imgur.com/WSRmlmt.png)
-
-Cornell box
-
-![Cornell box](https://i.imgur.com/dSaLhwd.png)
-
-Mori knob
-
-![Mori knob](https://i.imgur.com/jE4yPNP.png)
-
-Stanford dragon with glossy, glass and metal spheres
-
-![dragon](https://i.imgur.com/iLplu0d.png)
-
-Cornell box with various objects
-
-![box with objects](https://i.imgur.com/V7AuTSD.png)
+![Cornell box](https://i.imgur.com/aolJP3j.png)
 
 Sphere with UV texture
 
