@@ -8,39 +8,38 @@ import (
 const (
 	BSDF = iota
 	Lambertian
-	Metal
-	Dielectric
 	Emission
 )
 
 type Material struct {
-	material     int
-	albedo       Texture
-	roughness    float64
-	ior          float64
-	specularity  float64
-	metalicity   float64
-	transmission float64
+	material           int
+	albedo             Texture
+	roughness          float64
+	ior                float64
+	clearcoat          float64
+	clearcoatRoughness float64
+	metalicity         float64
+	transmission       float64
 }
 
 func getLambertian(albedo Texture) Material {
-	return Material{Lambertian, albedo, 0, 1.5, 0, 0, 0}
+	return Material{Lambertian, albedo, 0, 1.5, 0, 0, 0, 0}
 }
 
-func getDiffuse(albedo Texture, roughness, specularity float64) Material {
-	return Material{BSDF, albedo, roughness, 1.5, specularity, 0, 0}
+func getGlossy(albedo Texture, roughness, clearcoat float64) Material {
+	return Material{BSDF, albedo, roughness, 1.5, clearcoat, roughness, 0, 0}
 }
 
-func getDielectric(albedo Texture, roughness, specularity, ior float64) Material {
-	return Material{BSDF, albedo, roughness, ior, specularity, 0, 1}
+func getDielectric(albedo Texture, roughness, clearcoat, ior float64) Material {
+	return Material{BSDF, albedo, roughness, ior, clearcoat, roughness, 0, 1}
 }
 
-func getMetal(albedo Texture, roughness float64) Material {
-	return Material{BSDF, albedo, roughness, 1.5, 0, 1, 0}
+func getMetal(albedo Texture, roughness, clearcoat, clearcoatRoughness float64) Material {
+	return Material{BSDF, albedo, roughness, 1.5, clearcoat, clearcoatRoughness, 1, 0}
 }
 
 func getEmission(albedo Texture) Material {
-	return Material{Emission, albedo, 0, 0, 0, 0, 0}
+	return Material{Emission, albedo, 0, 0, 0, 0, 0, 0}
 }
 
 func sampleGGX(xi1, xi2, a float64) (float64, float64) {
@@ -49,19 +48,29 @@ func sampleGGX(xi1, xi2, a float64) (float64, float64) {
 	return phi, theta
 }
 
+func generateGGXNormal(normal Tuple, roughness float64, generator rand.Rand) (Tuple, float64) {
+	theta, phi := sampleGGX(RandFloat(generator), RandFloat(generator), roughness*roughness)
+
+	x := phi * math.Cos(theta)
+	y := phi * math.Sin(theta)
+	z := math.Sqrt(1 - x*x - y*y)
+
+	ggxNormal := Tuple{x, y, z, 0}
+	uvw := buildFromW(normal)
+	return uvw.local(ggxNormal).Normalize(), phi
+}
+
 func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *Ray, generator rand.Rand) bool {
 	incoming := r.direction.Normalize()
-	if m.material == Lambertian {
+	switch m.material {
+	case Lambertian:
 		target := rec.p.Add(rec.normal).Add(RandInUnitSphere(generator))
 		*scattered = Ray{rec.p, target.Subtract(rec.p)}
 		*attenuation = m.albedo.color(rec)
 		return true
-	} else if m.material == Metal {
-		reflected := incoming.Reflection(rec.normal)
-		*scattered = Ray{rec.p, reflected.Add(RandInUnitSphere(generator).MulScalar(m.roughness))}
-		*attenuation = m.albedo.color(rec)
-		return (scattered.direction.Dot(rec.normal) > 0)
-	} else if m.material == Dielectric {
+	case Emission:
+		return true
+	case BSDF:
 		var outwardNormal Tuple
 		var refracted Tuple
 
@@ -69,67 +78,37 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		var reflectProbability float64
 		var cosine float64
 
+		var n1, n2 float64
+		var phi float64
+
 		*attenuation = m.albedo.color(rec)
-		reflected := incoming.Reflection(rec.normal)
+
+		clearcoatNormal, phi := generateGGXNormal(rec.normal, rec.material.clearcoatRoughness, generator)
+		rec.normal, _ = generateGGXNormal(rec.normal, rec.material.roughness, generator)
 
 		if incoming.Dot(rec.normal) > 0 {
-			outwardNormal = rec.normal.MulScalar(-1)
-			niOverNt = m.ior
-			cosine = m.ior * incoming.Dot(rec.normal) / incoming.Magnitude()
+			n1 = rec.material.ior
+			n2 = 1.0
 		} else {
-			outwardNormal = rec.normal
-			niOverNt = 1.0 / m.ior
-			cosine = -(incoming.Dot(rec.normal) / incoming.Magnitude())
+			n1 = 1.0
+			n2 = rec.material.ior
 		}
-
-		if incoming.Refraction(outwardNormal, niOverNt, &refracted) {
-			reflectProbability = Schlick(cosine, m.ior) + m.specularity/4
-			if reflectProbability > 1.0 {
-				reflectProbability = 1.0
-			}
-		} else {
-			reflectProbability = 1.0
-		}
-
-		if RandFloat(generator) <= reflectProbability {
-			*scattered = Ray{rec.p, reflected.Add(RandInUnitSphere(generator).MulScalar(m.roughness))}
-			*attenuation = Color{reflectProbability, reflectProbability, reflectProbability}
-		} else {
-			*scattered = Ray{rec.p, refracted.Add(RandInUnitSphere(generator).MulScalar(m.roughness))}
-		}
-
-		return true
-	} else if m.material == Emission {
-		return true
-	} else if m.material == BSDF {
-		var outwardNormal Tuple
-		var refracted Tuple
-
-		var niOverNt float64
-		var reflectProbability float64
-		var cosine float64
-
-		*attenuation = m.albedo.color(rec)
-
-		theta, phi := sampleGGX(RandFloat(generator), RandFloat(generator), m.roughness*m.roughness)
-
-		x := phi * math.Cos(theta)
-		y := phi * math.Sin(theta)
-
-		z := math.Sqrt(1 - x*x - y*y)
-
-		ggxNormal := Tuple{x, y, z, 0}
-		uvw := buildFromW(rec.normal)
-		rec.normal = uvw.local(ggxNormal).Normalize()
 
 		reflected := incoming.Reflection(rec.normal)
+		reflectedClearcoat := incoming.Reflection(clearcoatNormal)
+		clearcoat := math.Pow(rec.material.clearcoat, 1/2.2)
+		reflectProbability = Fresnel(n1, n2, rec.normal, incoming) * (1 - phi)
+		reflectProbability = clearcoat * reflectProbability
 
 		if RandFloat(generator) <= m.metalicity {
-			*scattered = Ray{rec.p, reflected}
+			if RandFloat(generator) <= reflectProbability {
+				*scattered = Ray{rec.p, reflectedClearcoat}
+				*attenuation = Color{1, 1, 1}
+			} else {
+				*scattered = Ray{rec.p, reflected}
+			}
 			return (scattered.direction.Dot(rec.normal) > 0)
 		}
-
-		specularity := math.Pow(rec.material.specularity, 1/2.2)
 
 		if RandFloat(generator) <= m.transmission {
 			if incoming.Dot(rec.normal) > 0 {
@@ -144,7 +123,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 
 			if incoming.Refraction(outwardNormal, niOverNt, &refracted) {
 				reflectProbability = Schlick(cosine, m.ior)
-				reflectProbability = specularity * reflectProbability
+				reflectProbability = clearcoat * reflectProbability
 				if reflectProbability > 1.0 {
 					reflectProbability = 1.0
 				}
@@ -153,7 +132,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 			}
 
 			if RandFloat(generator) <= reflectProbability {
-				*scattered = Ray{rec.p, reflected}
+				*scattered = Ray{rec.p, reflectedClearcoat}
 				*attenuation = Color{1, 1, 1}
 			} else {
 				*scattered = Ray{rec.p, refracted}
@@ -162,21 +141,8 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 			return true
 		}
 
-		var n1, n2 float64
-
-		if incoming.Dot(rec.normal) > 0 {
-			n1 = rec.material.ior
-			n2 = 1.0
-		} else {
-			n1 = 1.0
-			n2 = rec.material.ior
-		}
-
-		reflectProbability = Fresnel(n1, n2, rec.normal, incoming) * (1 - phi)
-		reflectProbability = specularity * reflectProbability
-
 		if RandFloat(generator) <= reflectProbability {
-			*scattered = Ray{rec.p, reflected}
+			*scattered = Ray{rec.p, reflectedClearcoat}
 			*attenuation = Color{1, 1, 1}
 		} else {
 			target := rec.p.Add(rec.normal).Add(RandInUnitSphere(generator))
@@ -184,6 +150,7 @@ func (m Material) Scatter(r Ray, rec HitRecord, attenuation *Color, scattered *R
 		}
 
 		return true
+	default:
+		return false
 	}
-	return false
 }
