@@ -15,7 +15,8 @@ This project is a Monte Carlo path tracer written in Golang that runs on CPU.
             - texture or color
         - roughness (GGX microfacet model)
         - index of refraction
-        - specularity (amount of clearcoat)
+        - amount of clearcoat
+        - roughness of clearcoat
         - metalicity
         - transmission
     - Emission material:
@@ -60,23 +61,6 @@ To run the program, type the following command:
 
 ```
 go run .
-```
-
-The program should give you an output, like:
-
-```
-2020/03/29 16:42:20 Loading scene...
-2020/03/29 16:42:20 Loading cornellbox_objects.obj...
-2020/03/29 16:42:31 Loading cornellbox_lights.obj...
-2020/03/29 16:42:31 Loading cornellbox_floor.obj...
-2020/03/29 16:42:31 Building BVHs...
-100.00% (2010603/2010603 triangles, 25/25 objects)
-2020/03/29 16:42:44 Built BVHs
-2020/03/29 16:42:44 Rendering 25 objects (2010603 triangles) and 0 spheres at 256x256 at 128 samples on 16 cores
-100.00% ( 128/ 128)      6.0952337s/frame,        93.005µs sample time, ETA:              0s
-2020/03/29 16:43:37 Rendering took 52.3339386s
-Average frame time: 6.49947957s, average sample time: 99.173µs
-Saving...
 ```
 
 ## Example renders
