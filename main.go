@@ -96,7 +96,7 @@ func loadMaterial(file *os.File, name string) Material {
 							r, _ := strconv.ParseFloat(text[1], 64)
 							g, _ := strconv.ParseFloat(text[2], 64)
 							b, _ := strconv.ParseFloat(text[3], 64)
-							material.specularity = (r + g + b) / 3
+							material.clearcoat = (r + g + b) / 3
 						}
 						if text[0] == "Ns" {
 							roughness, _ := strconv.ParseFloat(text[1], 64)
@@ -107,6 +107,7 @@ func loadMaterial(file *os.File, name string) Material {
 								x1 = 0.0
 							}
 							material.roughness = x1
+							material.clearcoatRoughness = x1
 						}
 						if text[0] == "Ni" {
 							ior, _ := strconv.ParseFloat(text[1], 64)
@@ -128,7 +129,8 @@ func loadMaterial(file *os.File, name string) Material {
 							case 2, 4, 6, 7, 9:
 								material.material = BSDF
 							case 3:
-								material.material = Metal
+								material.material = BSDF
+								material.metalicity = 1.0
 							}
 						}
 						if text[0] == "map_Kd" {
@@ -160,7 +162,7 @@ func fileExists(path string) bool {
 }
 
 func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrideMaterial bool) {
-	log.Printf("Loading %v...\n", path)
+	log.Printf("Loading 3D scene from %v file\n", path)
 	vertices := []Tuple{}
 	vertNormals := []Tuple{}
 	vertTexture := []Tuple{}
@@ -196,6 +198,7 @@ func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrid
 			if !overrideMaterial {
 				if text[0] == "mtllib" {
 					if fileExists(text[1]) {
+						log.Printf("Opening material library file %s", text[1])
 						materialFile, _ = os.Open(text[1])
 						exists = true
 					} else {
@@ -204,6 +207,7 @@ func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrid
 				}
 				if text[0] == "usemtl" {
 					if exists {
+						log.Printf("Loading material %s", text[1])
 						material = loadMaterial(materialFile, text[1])
 					}
 				}
@@ -534,6 +538,7 @@ func getBVHSphere(spheres []Sphere, depth, x int) *BVHSphere {
 }
 
 func loadImage(path string) image.Image {
+	log.Printf("Loading image: %s...", path)
 	var texture image.Image
 	if fileExists(path) {
 		textureFile, _ := os.Open(path)
@@ -577,60 +582,20 @@ func main() {
 	averageSampleTime := time.Duration(0.0)
 	numTris, done := 0, 0
 
-	// cameraPosition := Tuple{0, 2, 7, 0}
-	// cameraDirection := Tuple{0, 0.5, 0, 0}
-	// focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
-	// fLength := 10.0 // mm
-	// fNumber := 128.0
+	cameraPosition := Tuple{1.031, 0.25544, -0.86657, 0}
+	cameraDirection := Tuple{0.1, 0.13109, -0.01, 0}
+	focusPoint := Tuple{0.04789, 0.13109, -0.01, 0}
 
-	cameraPosition := Tuple{0, 0.5, 7, 0}
-	cameraDirection := Tuple{0, 0.5, 0, 0}
-	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
+	focusDistance := focusPoint.Subtract(cameraPosition).Magnitude()
 	fLength := 50.0 // mm
-	fNumber := 128.0
+	fNumber := 3.2
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, fLength, float64(hsize)/float64(vsize), fNumber, focusDistance)
 
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, -1000000, 0, 0}, 1000000,
-		getDiffuse(getConstant(Hex(0x24092E)), 0.2, 0.05),
-	})
+	loadOBJ("mori.obj", &listTriangles, Material{}, true, false)
 
 	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, 0.5, 0, 0}, 0.5,
-		getDielectric(getConstant(Hex(0x9BF2FF)), 0.2, 1, 1.45),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{1, 0.5, 0, 0}, 0.5,
-		getDiffuse(getConstant(Hex(0x000000)), 0.75, 0.025),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-1, 0.5, 0, 0}, 0.5,
-		getDiffuse(getConstant(Hex(0x456300)), 0.2, .05),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, 1.5, 0, 0}, 0.5,
-		getDiffuse(getConstant(Hex(0xFF9B00)), 0.0, 1),
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{1, 1.5, 0, 0}, 0.5,
-		Material{
-			BSDF,
-			getConstant(Hex(0xffffff)),
-			0.2,
-			1.5,
-			1.0,
-			0.5,
-			0.0,
-		},
-	})
-
-	listSpheres = append(listSpheres, Sphere{
-		Tuple{-1, 1.5, 0, 0}, 0.5,
-		getMetal(getConstant(Hex(0xffffff)), 0.15),
+		Tuple{0, -100000, 0, 0}, 100000,
+		getGlossy(getCheckerboard(Color{0.8, 0.8, 0.8}, Color{0.4, 0.4, 0.4}, 0.5, 0.5, 0.5), 0.2, 0.1),
 	})
 
 	bvh := []*BVH{}
