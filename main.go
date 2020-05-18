@@ -26,6 +26,8 @@ const (
 	samples        = 2048
 	depth          = 8
 	limitTriangles = 100
+	preview        = false
+	jitter         = true
 )
 
 func colorize(r Ray, world *HittableList, d int, generator rand.Rand, envMap Texture) Color {
@@ -33,14 +35,24 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand, envMap Tex
 	if world.hit(r, Epsilon, math.MaxFloat64, &rec) {
 		var attenuation Color
 		var scattered Ray
-		if d < depth && rec.material.Scatter(r, rec, &attenuation, &scattered, generator) {
-			if rec.material.material == Emission {
-				return rec.material.albedo.color(rec)
+		if !preview {
+			if d < depth && rec.material.Scatter(r, rec, &attenuation, &scattered, generator) {
+				if rec.material.material == Emission {
+					return rec.material.albedo.color(rec)
+				} else {
+					return attenuation.Mul(colorize(scattered, world, d+1, generator, envMap))
+				}
 			} else {
-				return attenuation.Mul(colorize(scattered, world, d+1, generator, envMap))
+				return Color{0, 0, 0}
 			}
 		} else {
-			return Color{0, 0, 0}
+			if d < depth && rec.material.Scatter(r, rec, &attenuation, &scattered, generator) {
+				shadeAmount := Tuple{0, 1, 0, 0}.Dot(rec.normal)
+				shadowMin := 0.5
+				return rec.material.albedo.color(rec).MulScalar(shadeAmount*(1-shadowMin) + shadowMin)
+			} else {
+				return Color{0, 0, 0}
+			}
 		}
 	} else {
 		if envMap.mode == SphereImageUV {
@@ -657,8 +669,14 @@ func main() {
 				for y := vsize - 1; y >= 0; y-- {
 					for x := 0; x < hsize; x++ {
 						col := Color{0, 0, 0}
-						u := (float64(x) + RandFloat(*generator)) / float64(hsize)
-						v := (float64(y) + RandFloat(*generator)) / float64(vsize)
+						u := float64(x)
+						v := float64(y)
+						if jitter {
+							u += RandFloat(*generator)
+							v += RandFloat(*generator)
+						}
+						u /= float64(hsize)
+						v /= float64(vsize)
 						r := camera.getRay(u, v, *generator)
 
 						col = colorize(r, &world, 0, *generator, envMap)
@@ -694,8 +712,14 @@ func main() {
 				for y := vsize - 1; y >= 0; y-- {
 					for x := 0; x < hsize; x++ {
 						col := Color{0, 0, 0}
-						u := (float64(x) + RandFloat(*generator)) / float64(hsize)
-						v := (float64(y) + RandFloat(*generator)) / float64(vsize)
+						u := float64(x)
+						v := float64(y)
+						if jitter {
+							u += RandFloat(*generator)
+							v += RandFloat(*generator)
+						}
+						u /= float64(hsize)
+						v /= float64(vsize)
 						r := camera.getRay(u, v, *generator)
 
 						col = colorize(r, &world, 0, *generator, envMap)
