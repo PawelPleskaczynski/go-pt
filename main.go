@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -30,6 +32,41 @@ const (
 	jitter         = true
 )
 
+type ImageHash struct {
+	image [][]Color
+	hash  string
+}
+
+func wasImageLoaded(hash string, table []ImageHash) int {
+	for i := 0; i < len(table); i++ {
+		if table[i].hash == hash {
+			return i
+		}
+	}
+	return -1
+}
+
+type MaterialHash struct {
+	material Material
+	hash     string
+}
+
+func wasMaterialLoaded(hash string, table []MaterialHash) int {
+	for i := 0; i < len(table); i++ {
+		if table[i].hash == hash {
+			return i
+		}
+	}
+	return -1
+}
+
+func hash(s string) string {
+	hasher := sha1.New()
+	hasher.Write([]byte(s))
+	sha := hasher.Sum(nil)
+	return hex.EncodeToString(sha)
+}
+
 func colorize(r Ray, world *HittableList, d int, generator rand.Rand, envMap Texture) Color {
 	rec := HitRecord{}
 	if world.hit(r, Epsilon, math.MaxFloat64, &rec) {
@@ -47,9 +84,15 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand, envMap Tex
 			}
 		} else {
 			if d < depth && rec.material.Scatter(r, rec, &attenuation, &scattered, generator) {
-				shadeAmount := Tuple{0, 1, 0, 0}.Dot(rec.normal)
-				shadowMin := 0.5
-				return rec.material.albedo.color(rec).MulScalar(shadeAmount*(1-shadowMin) + shadowMin)
+				if rec.material.metalicity > 0.0 {
+					return rec.material.albedo.color(rec).Mul(colorize(scattered, world, d+1, generator, envMap))
+				} else if rec.material.transmission > 0.0 {
+					return rec.material.albedo.color(rec).Mul(colorize(scattered, world, d+1, generator, envMap))
+				} else {
+					shadeAmount := Tuple{0, 1, 0, 0}.Dot(rec.normal)
+					shadowMin := 0.5
+					return rec.material.albedo.color(rec).MulScalar(shadeAmount*(1-shadowMin) + shadowMin)
+				}
 			} else {
 				return Color{0, 0, 0}
 			}
@@ -75,7 +118,7 @@ func solveQuadratic(a, b, c float64) (float64, float64) {
 	return math.MaxFloat64, math.MaxFloat64
 }
 
-func loadMaterial(file *os.File, name string) Material {
+func loadMaterial(file *os.File, name string, imageArray *[]ImageHash) Material {
 	material := Material{material: Lambertian}
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -95,7 +138,6 @@ func loadMaterial(file *os.File, name string) Material {
 							if r > 0.0 || g > 0.0 || b > 0.0 {
 								material.albedo = getConstant(Color{r, g, b})
 								material.material = Emission
-								break
 							}
 						}
 						if text[0] == "Kd" {
@@ -134,27 +176,29 @@ func loadMaterial(file *os.File, name string) Material {
 							material.transmission = transmission
 						}
 						if text[0] == "illum" {
-							mode, _ := strconv.ParseInt(text[1], 0, 0)
-							switch mode {
-							case 1:
-								material.material = Lambertian
-							case 2, 4, 6, 7, 9:
-								material.material = BSDF
-							case 3:
-								material.material = BSDF
-								material.metalicity = 1.0
+							if material.material != Emission {
+								mode, _ := strconv.ParseInt(text[1], 0, 0)
+								switch mode {
+								case 1:
+									material.material = Lambertian
+								case 2, 4, 6, 7, 9:
+									material.material = BSDF
+								case 3:
+									material.material = BSDF
+									material.metalicity = 1.0
+								}
 							}
 						}
-						if text[0] == "map_Kd" {
+						if text[0] == "map_Kd" || text[0] == "map_Ke" {
 							if fileExists(text[1]) {
-								texture := loadTexture(loadImage(text[1]))
+								texture := getTexture(text[1], imageArray)
 								material.albedo.diffuseTexture = texture
 								material.albedo.mode = TriangleImageUV
 							}
 						}
 						if text[0] == "map_Bump" || text[0] == "map_bump" || text[0] == "bump" {
 							if fileExists(text[1]) {
-								texture := loadTexture(loadImage(text[1]))
+								texture := getTexture(text[1], imageArray)
 								material.albedo.normalTexture = texture
 							}
 						}
@@ -173,7 +217,7 @@ func fileExists(path string) bool {
 	return true
 }
 
-func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrideMaterial bool) {
+func loadOBJ(path string, list *[][]Triangle, imageArray *[]ImageHash, materialArray *[]MaterialHash, material Material, smooth, overrideMaterial bool) {
 	log.Printf("Loading 3D scene from %v file\n", path)
 	vertices := []Tuple{}
 	vertNormals := []Tuple{}
@@ -219,8 +263,18 @@ func loadOBJ(path string, list *[][]Triangle, material Material, smooth, overrid
 				}
 				if text[0] == "usemtl" {
 					if exists {
-						log.Printf("Loading material %s", text[1])
-						material = loadMaterial(materialFile, text[1])
+						strHash := hash(text[1])
+						result := wasMaterialLoaded(strHash, *materialArray)
+						if result == -1 {
+							log.Printf("Loading new material: %s", text[1])
+							material = loadMaterial(materialFile, text[1], imageArray)
+
+							*materialArray = append(*materialArray, MaterialHash{
+								material, strHash,
+							})
+						} else {
+							material = (*materialArray)[result].material
+						}
 					}
 				}
 			}
@@ -585,10 +639,27 @@ func loadTexture(texture image.Image) [][]Color {
 	return array
 }
 
+func getTexture(path string, imageArray *[]ImageHash) [][]Color {
+	var texture [][]Color
+	strHash := hash(path)
+	result := wasImageLoaded(strHash, *imageArray)
+	if result == -1 {
+		texture = loadTexture(loadImage(path))
+		*imageArray = append(*imageArray, ImageHash{
+			texture, strHash,
+		})
+	} else {
+		texture = (*imageArray)[result].image
+	}
+	return texture
+}
+
 func main() {
 	log.Println("Loading scene...")
 	listSpheres := []Sphere{}
 	listTriangles := [][]Triangle{}
+	imageArray := []ImageHash{}
+	materialArray := []MaterialHash{}
 
 	averageFrameTime := time.Duration(0.0)
 	averageSampleTime := time.Duration(0.0)
@@ -603,7 +674,7 @@ func main() {
 	fNumber := 3.2
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, fLength, float64(hsize)/float64(vsize), fNumber, focusDistance)
 
-	loadOBJ("mori.obj", &listTriangles, Material{}, true, false)
+	loadOBJ("mori.obj", &listTriangles, &imageArray, &materialArray, Material{}, true, false)
 
 	listSpheres = append(listSpheres, Sphere{
 		Tuple{0, -100000, 0, 0}, 100000,
@@ -656,7 +727,7 @@ func main() {
 
 	// envMap := getConstant(Hex(0))
 	// envMap := getConstant(Hex(0xffffff))
-	envMap := getImageUV(loadTexture(loadImage("park.hdr")))
+	envMap := getImageUV(getTexture("park.hdr", &imageArray))
 
 	log.Printf("Rendering %d objects (%d triangles) and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), numTris, len(listSpheres), hsize, vsize, samples, cpus)
 
