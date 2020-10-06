@@ -9,6 +9,7 @@ This project is a Monte Carlo path tracer written in Golang that runs on CPU.
 - Parallel processing on multiple CPU cores
 - BVH trees for accelerating intersection tests
 - Positionable camera with adjustable focal length and aperture
+- Transformations (translation, rotation)
 - Materials:
     - universal material with adjustable properties:
         - albedo:
@@ -36,7 +37,6 @@ This project is a Monte Carlo path tracer written in Golang that runs on CPU.
     - Can be loaded from normal image files or from Radiance HDR files (loaded using [hdr](https://github.com/mdouchement/hdr) library)
 ### To-do
 - Building scenes from files (probably JSON?)
-- Transformations (translation, rotation, etc.)
 - More primitives and BVH trees for them
     - Constructive solid geometry
 - Volumetric rendering
