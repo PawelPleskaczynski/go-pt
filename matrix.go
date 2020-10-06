@@ -9,18 +9,6 @@ type Mat struct {
 	mat [][]float64
 }
 
-// MatrixEquals checks if two matrices have equal values
-func MatrixEquals(mat1, mat2 Mat) bool {
-	for y := range mat1.mat {
-		for x := range mat2.mat {
-			if Equal(mat1.mat[x][y], mat2.mat[x][y]) != true {
-				return false
-			}
-		}
-	}
-	return true
-}
-
 // MatShape returns shape of the matrix
 func (mat Mat) MatShape() [2]int {
 	return [2]int{len(mat.mat[0]), len(mat.mat)}
@@ -64,22 +52,21 @@ func (mat Mat) TupMul(tup Tuple) Tuple {
 		{tup.x},
 		{tup.y},
 		{tup.z},
-		{tup.w},
+		{1},
 	}}
 
 	tempArray := make([][]float64, len(mat.mat))
-	returnMat := Mat{tempArray}
 
 	for i := 0; i < len(mat.mat); i++ {
 		tempArray[i] = make([]float64, len(tupMat.mat[0]))
 		for j := 0; j < len(tupMat.mat[0]); j++ {
-			for k := 0; k < len(tupMat.mat); k++ {
+			for k := 0; k < len(mat.mat[0]); k++ {
 				tempArray[i][j] += mat.mat[i][k] * tupMat.mat[k][j]
 			}
 		}
 	}
 
-	return Tuple{returnMat.mat[0][0], returnMat.mat[1][0], returnMat.mat[2][0], returnMat.mat[3][0]}
+	return Tuple{tempArray[0][0], tempArray[1][0], tempArray[2][0], tempArray[3][0]}
 }
 
 // ScalarMul multiplies a matrix by a scalar
@@ -222,7 +209,7 @@ func ScaleMat(x, y, z float64) []Mat {
 // RotateXMat returns a matrix for rotating in x axis by angle
 func RotateXMat(angle float64) []Mat {
 	transformMat := GetIdentityMatrix(4)
-	transformMat.mat[1][1], transformMat.mat[2][1], transformMat.mat[2][1], transformMat.mat[2][2] = math.Cos(angle), -math.Sin(angle), math.Sin(angle), math.Cos(angle)
+	transformMat.mat[1][1], transformMat.mat[2][1], transformMat.mat[1][2], transformMat.mat[2][2] = math.Cos(angle), -math.Sin(angle), math.Sin(angle), math.Cos(angle)
 
 	return []Mat{transformMat, transformMat.MatTranspose().Invert()}
 }
@@ -230,7 +217,7 @@ func RotateXMat(angle float64) []Mat {
 // RotateYMat returns a matrix for rotating in y axis by angle
 func RotateYMat(angle float64) []Mat {
 	transformMat := GetIdentityMatrix(4)
-	transformMat.mat[0][0], transformMat.mat[2][0], transformMat.mat[2][0], transformMat.mat[2][2] = math.Cos(angle), math.Sin(angle), -math.Sin(angle), math.Cos(angle)
+	transformMat.mat[0][0], transformMat.mat[2][0], transformMat.mat[0][2], transformMat.mat[2][2] = math.Cos(angle), math.Sin(angle), -math.Sin(angle), math.Cos(angle)
 
 	return []Mat{transformMat, transformMat.MatTranspose().Invert()}
 }
@@ -241,34 +228,4 @@ func RotateZMat(angle float64) []Mat {
 	transformMat.mat[0][0], transformMat.mat[0][1], transformMat.mat[1][0], transformMat.mat[1][1] = math.Cos(angle), -math.Sin(angle), math.Sin(angle), math.Cos(angle)
 
 	return []Mat{transformMat, transformMat.MatTranspose().Invert()}
-}
-
-// ShearMat returns a matrix for shearing by xy, xz, yx, yz, zx, zy
-func ShearMat(xy, xz, yx, yz, zx, zy float64) []Mat {
-	transformMat := GetIdentityMatrix(4)
-	transformMat.mat[0][1], transformMat.mat[0][2], transformMat.mat[1][0], transformMat.mat[1][2], transformMat.mat[2][0], transformMat.mat[2][1] = xy, xz, yx, yz, zx, zy
-
-	return []Mat{transformMat, transformMat.MatTranspose().Invert()}
-}
-
-// ViewTransformationMat returns a matrix for transforming the view
-// default from, to, up = (0, 0, 0), (0, 0, -1), (0, 1, 0)
-func ViewTransformationMat(from, to, up Tuple) []Mat {
-	forward := (to.Subtract(from)).Normalize()
-	upn := up.Normalize()
-	left := forward.Cross(upn)
-	trueUp := left.Cross(forward)
-
-	orientation := Mat{
-		[][]float64{
-			{left.x, left.y, left.z, 0},
-			{trueUp.x, trueUp.y, trueUp.z, 0},
-			{-forward.x, -forward.y, -forward.z, 0},
-			{0, 0, 0, 1},
-		},
-	}
-
-	returnMat := orientation.MatMul(TranslationMat(-from.x, -from.y, -from.z)[0])
-
-	return []Mat{returnMat, returnMat.MatTranspose().Invert()}
 }
