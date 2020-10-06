@@ -1,71 +1,25 @@
 package main
 
 import (
-	"bufio"
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
-	"image"
-	"image/jpeg"
-	"image/png"
-	"io"
 	"log"
 	"math"
 	"math/rand"
-	"os"
 	"runtime"
-	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	_ "github.com/mdouchement/hdr/codec/rgbe"
 )
 
 const (
-	hsize          = 768
-	vsize          = 512
-	samples        = 2048
+	hsize          = 512 * 3
+	vsize          = 256 * 3
+	samples        = 8192
 	depth          = 8
 	limitTriangles = 100
 	preview        = false
 	jitter         = true
 )
-
-type ImageHash struct {
-	image [][]Color
-	hash  string
-}
-
-func wasImageLoaded(hash string, table []ImageHash) int {
-	for i := 0; i < len(table); i++ {
-		if table[i].hash == hash {
-			return i
-		}
-	}
-	return -1
-}
-
-type MaterialHash struct {
-	material Material
-	hash     string
-}
-
-func wasMaterialLoaded(hash string, table []MaterialHash) int {
-	for i := 0; i < len(table); i++ {
-		if table[i].hash == hash {
-			return i
-		}
-	}
-	return -1
-}
-
-func hash(s string) string {
-	hasher := sha1.New()
-	hasher.Write([]byte(s))
-	sha := hasher.Sum(nil)
-	return hex.EncodeToString(sha)
-}
 
 func colorize(r Ray, world *HittableList, d int, generator rand.Rand, envMap Texture) Color {
 	rec := HitRecord{}
@@ -107,578 +61,34 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand, envMap Tex
 	}
 }
 
-func solveQuadratic(a, b, c float64) (float64, float64) {
-	discriminant := b*b - 4*a*c
-	if discriminant > 0 {
-		return (-b - math.Sqrt(discriminant)) / (2.0 * a), (-b + math.Sqrt(discriminant)) / (2.0 * a)
-	} else if discriminant == 0 {
-		return -b / (2.0 * a), -b / (2.0 * a)
-	}
-
-	return math.MaxFloat64, math.MaxFloat64
-}
-
-func loadMaterial(file *os.File, name string, imageArray *[]ImageHash) Material {
-	material := Material{material: Lambertian}
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		text := strings.Fields(scanner.Text())
-		if len(text) > 0 {
-			if text[0] == "newmtl" && text[1] == name {
-				for scanner.Scan() {
-					text = strings.Fields(scanner.Text())
-					if len(text) > 0 {
-						if text[0] == "newmtl" {
-							break
-						}
-						if text[0] == "Ke" {
-							r, _ := strconv.ParseFloat(text[1], 64)
-							g, _ := strconv.ParseFloat(text[2], 64)
-							b, _ := strconv.ParseFloat(text[3], 64)
-							if r > 0.0 || g > 0.0 || b > 0.0 {
-								material.albedo = getConstant(Color{r, g, b})
-								material.material = Emission
-							}
-						}
-						if text[0] == "Kd" {
-							r, _ := strconv.ParseFloat(text[1], 64)
-							g, _ := strconv.ParseFloat(text[2], 64)
-							b, _ := strconv.ParseFloat(text[3], 64)
-							material.albedo = getConstant(Color{r, g, b})
-						}
-						if text[0] == "Ks" {
-							r, _ := strconv.ParseFloat(text[1], 64)
-							g, _ := strconv.ParseFloat(text[2], 64)
-							b, _ := strconv.ParseFloat(text[3], 64)
-							material.clearcoat = (r + g + b) / 3
-						}
-						if text[0] == "Ns" {
-							roughness, _ := strconv.ParseFloat(text[1], 64)
-							x1, _ := solveQuadratic(900, -1800, 900-roughness)
-							if x1 > 1.0 {
-								x1 = 1.0
-							} else if x1 < 0.0 {
-								x1 = 0.0
-							}
-							material.roughness = x1
-							material.clearcoatRoughness = x1
-						}
-						if text[0] == "Ni" {
-							ior, _ := strconv.ParseFloat(text[1], 64)
-							material.ior = ior
-						}
-						if text[0] == "d" {
-							transmission, _ := strconv.ParseFloat(text[1], 64)
-							material.transmission = 1 - transmission
-						}
-						if text[0] == "Tr" {
-							transmission, _ := strconv.ParseFloat(text[1], 64)
-							material.transmission = transmission
-						}
-						if text[0] == "illum" {
-							if material.material != Emission {
-								mode, _ := strconv.ParseInt(text[1], 0, 0)
-								switch mode {
-								case 1:
-									material.material = Lambertian
-								case 2, 4, 6, 7, 9:
-									material.material = BSDF
-								case 3:
-									material.material = BSDF
-									material.metalicity = 1.0
-								}
-							}
-						}
-						if text[0] == "map_Kd" || text[0] == "map_Ke" {
-							if fileExists(text[1]) {
-								texture := getTexture(text[1], imageArray)
-								material.albedo.diffuseTexture = texture
-								material.albedo.mode = TriangleImageUV
-							}
-						}
-						if text[0] == "map_Bump" || text[0] == "map_bump" || text[0] == "bump" {
-							if fileExists(text[1]) {
-								texture := getTexture(text[1], imageArray)
-								material.albedo.normalTexture = texture
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	return material
-}
-
-func fileExists(path string) bool {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-func loadOBJ(path string, list *[][]Triangle, imageArray *[]ImageHash, materialArray *[]MaterialHash, material Material, smooth, overrideMaterial bool) {
-	log.Printf("Loading 3D scene from %v file\n", path)
-	vertices := []Tuple{}
-	vertNormals := []Tuple{}
-	vertTexture := []Tuple{}
-	faceVerts := []TrianglePosition{}
-	faceNormals := []TrianglePosition{}
-	faceTexture := []TrianglePosition{}
-	var materialFile *os.File
-
-	file, err := os.Open(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	f := 0
-
-	exists := false
-
-	object := []Triangle{}
-
-	defer file.Close()
-	defer materialFile.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		materialFile.Seek(0, io.SeekStart)
-		text := strings.Fields(scanner.Text())
-		if len(text) > 0 {
-			if text[0] == "o" {
-				if len(object) > 0 {
-					*list = append(*list, object)
-					object = nil
-				}
-			}
-			if !overrideMaterial {
-				if text[0] == "mtllib" {
-					if fileExists(text[1]) {
-						log.Printf("Opening material library file %s", text[1])
-						materialFile, _ = os.Open(text[1])
-						exists = true
-					} else {
-						exists = false
-					}
-				}
-				if text[0] == "usemtl" {
-					if exists {
-						strHash := hash(text[1])
-						result := wasMaterialLoaded(strHash, *materialArray)
-						if result == -1 {
-							log.Printf("Loading new material: %s", text[1])
-							material = loadMaterial(materialFile, text[1], imageArray)
-
-							*materialArray = append(*materialArray, MaterialHash{
-								material, strHash,
-							})
-						} else {
-							material = (*materialArray)[result].material
-						}
-					}
-				}
-			}
-			if text[0] == "v" {
-				x, _ := strconv.ParseFloat(text[1], 64)
-				y, _ := strconv.ParseFloat(text[2], 64)
-				z, _ := strconv.ParseFloat(text[3], 64)
-				vertices = append(vertices, Tuple{
-					x, y, z, 0,
-				})
-			} else if text[0] == "vn" {
-				x, _ := strconv.ParseFloat(text[1], 64)
-				y, _ := strconv.ParseFloat(text[2], 64)
-				z, _ := strconv.ParseFloat(text[3], 64)
-				vertNormals = append(vertNormals, Tuple{
-					x, y, z, 0,
-				})
-			} else if text[0] == "vt" {
-				u, _ := strconv.ParseFloat(text[1], 64)
-				v, _ := strconv.ParseFloat(text[2], 64)
-				vertTexture = append(vertTexture, Tuple{
-					u, v, 1, 0,
-				})
-			} else if text[0] == "f" {
-				vertCount := len(text) - 1
-				for i := 0; i < vertCount-2; i++ {
-					values1 := strings.Split(text[1], "/")
-					values2 := strings.Split(text[i+2], "/")
-					values3 := strings.Split(text[i+3], "/")
-
-					var v1, v2, v3, vt1, vt2, vt3, vn1, vn2, vn3 int
-
-					v1, _ = strconv.Atoi(values1[0])
-					v2, _ = strconv.Atoi(values2[0])
-					v3, _ = strconv.Atoi(values3[0])
-
-					if values1[1] != "" && values2[1] != "" && values3[1] != "" {
-						vt1, _ = strconv.Atoi(values1[1])
-						vt2, _ = strconv.Atoi(values2[1])
-						vt3, _ = strconv.Atoi(values3[1])
-
-						if vt1 < 0 {
-							vt1 = len(vertNormals) + vt1 + 1
-						}
-						if vt2 < 0 {
-							vt2 = len(vertNormals) + vt2 + 1
-						}
-						if vt3 < 0 {
-							vt3 = len(vertNormals) + vt3 + 1
-						}
-
-						faceTexture = append(faceTexture, TrianglePosition{
-							vertTexture[vt1-1], vertTexture[vt2-1], vertTexture[vt3-1],
-						})
-					} else {
-						faceTexture = append(faceTexture, TrianglePosition{})
-					}
-
-					if values1[2] != "" && values2[2] != "" && values3[2] != "" {
-						vn1, _ = strconv.Atoi(values1[2])
-						vn2, _ = strconv.Atoi(values2[2])
-						vn3, _ = strconv.Atoi(values3[2])
-
-						if vn1 < 0 {
-							vn1 = len(vertNormals) + vn1 + 1
-						}
-						if vn2 < 0 {
-							vn2 = len(vertNormals) + vn2 + 1
-						}
-						if vn3 < 0 {
-							vn3 = len(vertNormals) + vn3 + 1
-						}
-
-						faceNormals = append(faceNormals, TrianglePosition{
-							vertNormals[vn1-1], vertNormals[vn2-1], vertNormals[vn3-1],
-						})
-					} else {
-						faceNormals = append(faceNormals, TrianglePosition{})
-					}
-
-					if v1 < 0 {
-						v1 = len(vertices) + v1 + 1
-					}
-					if v2 < 0 {
-						v2 = len(vertices) + v2 + 1
-					}
-					if v3 < 0 {
-						v3 = len(vertices) + v3 + 1
-					}
-
-					faceVerts = append(faceVerts, TrianglePosition{
-						vertices[v1-1], vertices[v2-1], vertices[v3-1],
-					})
-
-					triangle := Triangle{
-						faceVerts[f],
-						faceTexture[f],
-						faceNormals[f],
-						material,
-						Tuple{0, 0, 0, 0},
-						smooth,
-					}
-					vertex0 := faceNormals[f].vertex0
-					vertex1 := faceNormals[f].vertex1
-					vertex2 := faceNormals[f].vertex2
-					triangle.normal = (vertex0.Add(vertex1).Add(vertex2)).Normalize()
-					object = append(object, triangle)
-					f++
-				}
-			}
-		}
-	}
-
-	if len(object) > 0 {
-		*list = append(*list, object)
-		object = nil
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func min3(a, b, c float64) float64 {
-	if a < b {
-		if a < c {
-			return a
-		}
-		return c
-	}
-	if b < c {
-		return b
-	}
-	return c
-}
-
-func max3(a, b, c float64) float64 {
-	if a > b {
-		if a > c {
-			return a
-		}
-		return c
-	}
-	if b > c {
-		return b
-	}
-	return c
-}
-
-func getBoundingBox(triangles []Triangle) AABB {
-	xMin, xMax, yMin, yMax, zMin, zMax := -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64
-
-	var aabb AABB
-	for _, triangle := range triangles {
-		x1 := triangle.position.vertex0.x
-		x2 := triangle.position.vertex1.x
-		x3 := triangle.position.vertex2.x
-		tempMin := max3(x1, x2, x3)
-		tempMax := min3(x1, x2, x3)
-		xMin = math.Max(xMin, tempMin)
-		xMax = math.Min(xMax, tempMax)
-
-		y1 := triangle.position.vertex0.y
-		y2 := triangle.position.vertex1.y
-		y3 := triangle.position.vertex2.y
-		tempMin = max3(y1, y2, y3)
-		tempMax = min3(y1, y2, y3)
-		yMin = math.Max(yMin, tempMin)
-		yMax = math.Min(yMax, tempMax)
-
-		z1 := triangle.position.vertex0.z
-		z2 := triangle.position.vertex1.z
-		z3 := triangle.position.vertex2.z
-		tempMin = max3(z1, z2, z3)
-		tempMax = min3(z1, z2, z3)
-		zMin = math.Max(zMin, tempMin)
-		zMax = math.Min(zMax, tempMax)
-	}
-
-	aabb.min = Tuple{xMax, yMax, zMax, 0}
-	aabb.max = Tuple{xMin, yMin, zMin, 0}
-
-	return aabb
-}
-
-func getBoundingBoxSpheres(spheres []Sphere) AABB {
-	xMin, xMax, yMin, yMax, zMin, zMax := -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64
-
-	var aabb AABB
-	for _, sphere := range spheres {
-		r := sphere.radius
-		x1 := sphere.origin.x + r
-		x2 := sphere.origin.x - r
-		xMax = math.Min(xMax, x2)
-		xMin = math.Max(xMin, x1)
-
-		y1 := sphere.origin.y + r
-		y2 := sphere.origin.y - r
-		yMax = math.Min(yMax, y2)
-		yMin = math.Max(yMin, y1)
-
-		z1 := sphere.origin.z + r
-		z2 := sphere.origin.z - r
-		zMax = math.Min(zMax, z2)
-		zMin = math.Max(zMin, z1)
-	}
-
-	aabb.min = Tuple{xMax, yMax, zMax, 0}
-	aabb.max = Tuple{xMin, yMin, zMin, 0}
-
-	return aabb
-}
-
-func getBVH(triangles []Triangle, depth, x int) *BVH {
-	if x > 2 {
-		x = 0
-	}
-	currentBox := getBoundingBox(triangles)
-	lenX, lenY, lenZ := currentBox.sizeX(), currentBox.sizeY(), currentBox.sizeZ()
-	maxLen := max3(lenX, lenY, lenZ)
-	if maxLen == lenX {
-		sort.Slice(triangles[:], func(i, j int) bool {
-			return triangles[i].position.vertex0.x < triangles[j].position.vertex0.x
-		})
-	} else if maxLen == lenY {
-		sort.Slice(triangles[:], func(i, j int) bool {
-			return triangles[i].position.vertex0.y < triangles[j].position.vertex0.y
-		})
-	} else if maxLen == lenZ {
-		sort.Slice(triangles[:], func(i, j int) bool {
-			return triangles[i].position.vertex0.z < triangles[j].position.vertex0.z
-		})
-	}
-	x++
-	size := len(triangles) / 2
-	rightList := triangles[:size]
-	leftList := triangles[size:]
-	aabbLeft := getBoundingBox(leftList)
-	aabbRight := getBoundingBox(rightList)
-	if size <= limitTriangles {
-		return &BVH{
-			&BVH{}, &BVH{},
-			[2]Leaf{
-				Leaf{aabbLeft, leftList},
-				Leaf{aabbRight, rightList},
-			},
-			getBoundingBox(triangles),
-			true,
-			depth,
-		}
-	}
-	if depth > 0 {
-		return &BVH{
-			getBVH(leftList, depth-1, x), getBVH(rightList, depth-1, x),
-			[2]Leaf{},
-			getBoundingBox(triangles),
-			false,
-			depth,
-		}
-	}
-	return &BVH{
-		&BVH{}, &BVH{},
-		[2]Leaf{
-			Leaf{aabbLeft, leftList},
-			Leaf{aabbRight, rightList},
-		},
-		getBoundingBox(triangles),
-		true,
-		depth,
-	}
-}
-
-func getBVHSphere(spheres []Sphere, depth, x int) *BVHSphere {
-	x++
-	if x > 2 {
-		x = 0
-	}
-	if x == 0 {
-		sort.Slice(spheres[:], func(i, j int) bool {
-			return spheres[i].origin.x < spheres[j].origin.x
-		})
-	} else if x == 1 {
-		sort.Slice(spheres[:], func(i, j int) bool {
-			return spheres[i].origin.y < spheres[j].origin.y
-		})
-	} else if x == 2 {
-		sort.Slice(spheres[:], func(i, j int) bool {
-			return spheres[i].origin.z < spheres[j].origin.z
-		})
-	}
-	size := len(spheres) / 2
-	rightList := spheres[:size]
-	leftList := spheres[size:]
-	aabbLeft := getBoundingBoxSpheres(leftList)
-	aabbRight := getBoundingBoxSpheres(rightList)
-	if size <= 1 {
-		return &BVHSphere{
-			&BVHSphere{}, &BVHSphere{},
-			[2]LeafSphere{
-				LeafSphere{aabbLeft, leftList},
-				LeafSphere{aabbRight, rightList},
-			},
-			getBoundingBoxSpheres(spheres),
-			true,
-			depth,
-		}
-	}
-	if depth > 0 {
-		return &BVHSphere{
-			getBVHSphere(leftList, depth-1, x), getBVHSphere(rightList, depth-1, x),
-			[2]LeafSphere{},
-			getBoundingBoxSpheres(spheres),
-			false,
-			depth,
-		}
-	}
-	return &BVHSphere{
-		&BVHSphere{}, &BVHSphere{},
-		[2]LeafSphere{
-			LeafSphere{aabbLeft, leftList},
-			LeafSphere{aabbRight, rightList},
-		},
-		getBoundingBoxSpheres(spheres),
-		true,
-		depth,
-	}
-}
-
-func loadImage(path string) image.Image {
-	log.Printf("Loading image: %s...", path)
-	var texture image.Image
-	if fileExists(path) {
-		textureFile, _ := os.Open(path)
-		if strings.HasSuffix(strings.ToLower(path), "png") {
-			texture, _ = png.Decode(textureFile)
-		} else if strings.HasSuffix(strings.ToLower(path), "jpg") || strings.HasSuffix(strings.ToLower(path), "jpeg") {
-			texture, _ = jpeg.Decode(textureFile)
-		} else if strings.HasSuffix(strings.ToLower(path), "hdr") {
-			texture, _, err := image.Decode(textureFile)
-			check(err)
-			return texture
-		}
-	}
-	return texture
-}
-
-func loadTexture(texture image.Image) [][]Color {
-	width := texture.Bounds().Dx()
-	height := texture.Bounds().Dy()
-	array := make([][]Color, width)
-	for i := 0; i < width; i++ {
-		array[i] = make([]Color, height)
-	}
-
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			r, g, b, _ := texture.At(x, y).RGBA()
-			array[x][y] = Color{float64(r>>8) / 255, float64(g>>8) / 255, float64(b>>8) / 255}
-		}
-	}
-
-	return array
-}
-
-func getTexture(path string, imageArray *[]ImageHash) [][]Color {
-	var texture [][]Color
-	strHash := hash(path)
-	result := wasImageLoaded(strHash, *imageArray)
-	if result == -1 {
-		texture = loadTexture(loadImage(path))
-		*imageArray = append(*imageArray, ImageHash{
-			texture, strHash,
-		})
-	} else {
-		texture = (*imageArray)[result].image
-	}
-	return texture
-}
-
 func main() {
 	log.Println("Loading scene...")
 	listSpheres := []Sphere{}
 	listTriangles := [][]Triangle{}
 	imageArray := []ImageHash{}
 	materialArray := []MaterialHash{}
+	transformationMatrix := GetIdentityMatrix(4)
+	transformationMatrix = transformationMatrix.MatMul(RotateYMat(math.Pi)[0])
 
 	averageFrameTime := time.Duration(0.0)
 	averageSampleTime := time.Duration(0.0)
 	numTris, done := 0, 0
 
-	cameraPosition := Tuple{1.031, 0.25544, -0.86657, 0}
-	cameraDirection := Tuple{0.1, 0.13109, -0.01, 0}
-	focusPoint := Tuple{0.04789, 0.13109, -0.01, 0}
+	loadOBJ("monkys.obj", &listTriangles, transformationMatrix, &imageArray, &materialArray, Material{}, true, false)
 
-	focusDistance := focusPoint.Subtract(cameraPosition).Magnitude()
-	fLength := 50.0 // mm
-	fNumber := 3.2
+	cameraPosition := Tuple{-5, 1.5, 0, 0}
+	cameraDirection := Tuple{0, 1.5, 0, 0}
+
+	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
+	fLength := 40.0 // mm
+	fNumber := 0.5
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, fLength, float64(hsize)/float64(vsize), fNumber, focusDistance)
 
-	loadOBJ("mori.obj", &listTriangles, &imageArray, &materialArray, Material{}, true, false)
+	loadOBJ("monkys.obj", &listTriangles, transformationMatrix, &imageArray, &materialArray, Material{}, true, false)
 
 	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, -100000, 0, 0}, 100000,
-		getGlossy(getCheckerboard(Color{0.8, 0.8, 0.8}, Color{0.4, 0.4, 0.4}, 0.5, 0.5, 0.5), 0.2, 0.1),
+		Tuple{0, -100000 + 1, 0, 0}, 100000,
+		getGlossy(getCheckerboard(Color{0.5, 0.5, 0.5}, Color{0.2, 0.2, 0.2}, 0.5, 0.5, 0.5), 0.2, 0.1),
 	})
 
 	bvh := []*BVH{}
@@ -727,7 +137,7 @@ func main() {
 
 	// envMap := getConstant(Hex(0))
 	// envMap := getConstant(Hex(0xffffff))
-	envMap := getImageUV(getTexture("park.hdr", &imageArray))
+	envMap := getImageUV(getTexture("interior.hdr", &imageArray))
 
 	log.Printf("Rendering %d objects (%d triangles) and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), numTris, len(listSpheres), hsize, vsize, samples, cpus)
 
