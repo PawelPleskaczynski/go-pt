@@ -2,6 +2,7 @@ package main
 
 import (
 	"math"
+	"sort"
 )
 
 type HitRecord struct {
@@ -45,6 +46,185 @@ type BVHSphere struct {
 type LeafSphere struct {
 	bounds  AABB
 	spheres []Sphere
+}
+
+func getBoundingBox(triangles []Triangle) AABB {
+	xMin, xMax, yMin, yMax, zMin, zMax := -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64
+
+	var aabb AABB
+	for _, triangle := range triangles {
+		x1 := triangle.position.vertex0.x
+		x2 := triangle.position.vertex1.x
+		x3 := triangle.position.vertex2.x
+		tempMin := max3(x1, x2, x3)
+		tempMax := min3(x1, x2, x3)
+		xMin = math.Max(xMin, tempMin)
+		xMax = math.Min(xMax, tempMax)
+
+		y1 := triangle.position.vertex0.y
+		y2 := triangle.position.vertex1.y
+		y3 := triangle.position.vertex2.y
+		tempMin = max3(y1, y2, y3)
+		tempMax = min3(y1, y2, y3)
+		yMin = math.Max(yMin, tempMin)
+		yMax = math.Min(yMax, tempMax)
+
+		z1 := triangle.position.vertex0.z
+		z2 := triangle.position.vertex1.z
+		z3 := triangle.position.vertex2.z
+		tempMin = max3(z1, z2, z3)
+		tempMax = min3(z1, z2, z3)
+		zMin = math.Max(zMin, tempMin)
+		zMax = math.Min(zMax, tempMax)
+	}
+
+	aabb.min = Tuple{xMax, yMax, zMax, 0}
+	aabb.max = Tuple{xMin, yMin, zMin, 0}
+
+	return aabb
+}
+
+func getBoundingBoxSpheres(spheres []Sphere) AABB {
+	xMin, xMax, yMin, yMax, zMin, zMax := -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64, -math.MaxFloat64, math.MaxFloat64
+
+	var aabb AABB
+	for _, sphere := range spheres {
+		r := sphere.radius
+		x1 := sphere.origin.x + r
+		x2 := sphere.origin.x - r
+		xMax = math.Min(xMax, x2)
+		xMin = math.Max(xMin, x1)
+
+		y1 := sphere.origin.y + r
+		y2 := sphere.origin.y - r
+		yMax = math.Min(yMax, y2)
+		yMin = math.Max(yMin, y1)
+
+		z1 := sphere.origin.z + r
+		z2 := sphere.origin.z - r
+		zMax = math.Min(zMax, z2)
+		zMin = math.Max(zMin, z1)
+	}
+
+	aabb.min = Tuple{xMax, yMax, zMax, 0}
+	aabb.max = Tuple{xMin, yMin, zMin, 0}
+
+	return aabb
+}
+
+func getBVH(triangles []Triangle, depth, x int) *BVH {
+	if x > 2 {
+		x = 0
+	}
+	currentBox := getBoundingBox(triangles)
+	lenX, lenY, lenZ := currentBox.sizeX(), currentBox.sizeY(), currentBox.sizeZ()
+	maxLen := max3(lenX, lenY, lenZ)
+	if maxLen == lenX {
+		sort.Slice(triangles[:], func(i, j int) bool {
+			return triangles[i].position.vertex0.x < triangles[j].position.vertex0.x
+		})
+	} else if maxLen == lenY {
+		sort.Slice(triangles[:], func(i, j int) bool {
+			return triangles[i].position.vertex0.y < triangles[j].position.vertex0.y
+		})
+	} else if maxLen == lenZ {
+		sort.Slice(triangles[:], func(i, j int) bool {
+			return triangles[i].position.vertex0.z < triangles[j].position.vertex0.z
+		})
+	}
+	x++
+	size := len(triangles) / 2
+	rightList := triangles[:size]
+	leftList := triangles[size:]
+	aabbLeft := getBoundingBox(leftList)
+	aabbRight := getBoundingBox(rightList)
+	if size <= limitTriangles {
+		return &BVH{
+			&BVH{}, &BVH{},
+			[2]Leaf{
+				Leaf{aabbLeft, leftList},
+				Leaf{aabbRight, rightList},
+			},
+			getBoundingBox(triangles),
+			true,
+			depth,
+		}
+	}
+	if depth > 0 {
+		return &BVH{
+			getBVH(leftList, depth-1, x), getBVH(rightList, depth-1, x),
+			[2]Leaf{},
+			getBoundingBox(triangles),
+			false,
+			depth,
+		}
+	}
+	return &BVH{
+		&BVH{}, &BVH{},
+		[2]Leaf{
+			Leaf{aabbLeft, leftList},
+			Leaf{aabbRight, rightList},
+		},
+		getBoundingBox(triangles),
+		true,
+		depth,
+	}
+}
+
+func getBVHSphere(spheres []Sphere, depth, x int) *BVHSphere {
+	x++
+	if x > 2 {
+		x = 0
+	}
+	if x == 0 {
+		sort.Slice(spheres[:], func(i, j int) bool {
+			return spheres[i].origin.x < spheres[j].origin.x
+		})
+	} else if x == 1 {
+		sort.Slice(spheres[:], func(i, j int) bool {
+			return spheres[i].origin.y < spheres[j].origin.y
+		})
+	} else if x == 2 {
+		sort.Slice(spheres[:], func(i, j int) bool {
+			return spheres[i].origin.z < spheres[j].origin.z
+		})
+	}
+	size := len(spheres) / 2
+	rightList := spheres[:size]
+	leftList := spheres[size:]
+	aabbLeft := getBoundingBoxSpheres(leftList)
+	aabbRight := getBoundingBoxSpheres(rightList)
+	if size <= 1 {
+		return &BVHSphere{
+			&BVHSphere{}, &BVHSphere{},
+			[2]LeafSphere{
+				LeafSphere{aabbLeft, leftList},
+				LeafSphere{aabbRight, rightList},
+			},
+			getBoundingBoxSpheres(spheres),
+			true,
+			depth,
+		}
+	}
+	if depth > 0 {
+		return &BVHSphere{
+			getBVHSphere(leftList, depth-1, x), getBVHSphere(rightList, depth-1, x),
+			[2]LeafSphere{},
+			getBoundingBoxSpheres(spheres),
+			false,
+			depth,
+		}
+	}
+	return &BVHSphere{
+		&BVHSphere{}, &BVHSphere{},
+		[2]LeafSphere{
+			LeafSphere{aabbLeft, leftList},
+			LeafSphere{aabbRight, rightList},
+		},
+		getBoundingBoxSpheres(spheres),
+		true,
+		depth,
+	}
 }
 
 func hitBVH(tree *BVH, level int, r Ray, tMin, tMax float64) []Leaf {
