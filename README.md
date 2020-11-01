@@ -75,6 +75,10 @@ Mori knobs - rough copper, rough glass, glossy plastic
 
 ![Mori knobs](https://i.imgur.com/ZKOIb0V.png)
 
+A scene with Nishita sky model with sun (denoised in Blender)
+
+![Scene with sky](https://i.imgur.com/4IRl0bB.png)
+
 Render of a scene with materials with different level on roughness from my path tracer on the left and reference render from Blender on the right
 
 ![Comparison](https://i.imgur.com/vzurrgh.png)
@@ -86,7 +90,3 @@ Four spheres with different textures and materials with HDRI environment map
 Cornell box with mirror box
 
 ![Cornell box](https://i.imgur.com/aolJP3j.png)
-
-Sphere with UV texture
-
-![Sphere with UV texture](https://i.imgur.com/ZQDCjSn.png)
