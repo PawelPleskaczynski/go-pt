@@ -35,6 +35,7 @@ This project is a Monte Carlo path tracer written in Golang that runs on CPU.
     - Image textures
 - Environment textures
     - Can be loaded from normal image files or from Radiance HDR files (loaded using [hdr](https://github.com/mdouchement/hdr) library)
+- Nishita sky model with a sun
 ### To-do
 - Building scenes from files (probably JSON?)
 - More primitives and BVH trees for them
