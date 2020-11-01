@@ -16,6 +16,7 @@ type HitRecord struct {
 type HittableList struct {
 	sphereBvh BVHSphere
 	bvh       []*BVH
+	atm       []Atmosphere
 }
 
 type AABB struct {

@@ -83,6 +83,15 @@ func (v Tuple) Cross(u Tuple) Tuple {
 	}
 }
 
+func (v Tuple) Mul(u Tuple) Tuple {
+	return Tuple{
+		v.x * u.x,
+		v.y * u.y,
+		v.z * u.z,
+		v.w,
+	}
+}
+
 // functions for transformations
 
 // Translate translates tuple by x, y, z values

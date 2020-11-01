@@ -13,8 +13,8 @@ import (
 
 const (
 	hsize          = 512 * 3
-	vsize          = 256 * 3
-	samples        = 8192
+	vsize          = 384 * 3
+	samples        = 2048 * 8
 	depth          = 8
 	limitTriangles = 100
 	preview        = false
@@ -52,7 +52,15 @@ func colorize(r Ray, world *HittableList, d int, generator rand.Rand, envMap Tex
 			}
 		}
 	} else {
-		if envMap.mode == SphereImageUV {
+		if len(world.atm) == 1 {
+			d := r.direction.Normalize()
+			rec.uT = 0.5 - (math.Atan2(d.z, d.x))/(2*math.Pi)*-1
+			rec.vT = 0.5 + (math.Asin(d.y))/(math.Pi)*-1
+			rec.p = d
+
+			color := world.atm[0].ComputeIncidentLight(Tuple{0, world.atm[0].earthRadius + 1, 0, 0}, rec.p, 0, math.MaxFloat64)
+			return Color{color.x, color.y, color.z}
+		} else if envMap.mode == SphereImageUV {
 			d := r.direction.Normalize()
 			rec.uT = 0.5 - (math.Atan2(d.z, d.x))/(2*math.Pi)*-1
 			rec.vT = 0.5 + (math.Asin(d.y))/(math.Pi)*-1
@@ -74,21 +82,36 @@ func main() {
 	averageSampleTime := time.Duration(0.0)
 	numTris, done := 0, 0
 
-	loadOBJ("monkys.obj", &listTriangles, transformationMatrix, &imageArray, &materialArray, Material{}, true, false)
-
-	cameraPosition := Tuple{-5, 1.5, 0, 0}
-	cameraDirection := Tuple{0, 1.5, 0, 0}
+	cameraPosition := Tuple{-5, 1.25, -5, 0}
+	cameraDirection := Tuple{0, 0.8, 0, 0}
 
 	focusDistance := cameraDirection.Subtract(cameraPosition).Magnitude()
 	fLength := 40.0 // mm
-	fNumber := 0.5
+	fNumber := 1024.0
 	camera := getCamera(cameraPosition, cameraDirection, Tuple{0, 1, 0, 0}, fLength, float64(hsize)/float64(vsize), fNumber, focusDistance)
 
-	loadOBJ("monkys.obj", &listTriangles, transformationMatrix, &imageArray, &materialArray, Material{}, true, false)
+	atm := NewEarthAtmosphere(Tuple{1.0, 0.5, 0.0, 0})
+
+	loadOBJ("scene.obj", &listTriangles, transformationMatrix, &imageArray, &materialArray, Material{}, true, false)
 
 	listSpheres = append(listSpheres, Sphere{
-		Tuple{0, -100000 + 1, 0, 0}, 100000,
-		getGlossy(getCheckerboard(Color{0.5, 0.5, 0.5}, Color{0.2, 0.2, 0.2}, 0.5, 0.5, 0.5), 0.2, 0.1),
+		Tuple{-1 + 0.4, 0.2, -1 - 0.2, 0}, 0.2,
+		getLambertian(getConstant(Color{1, 1, 1})),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{-1, 0.2, -1, 0}, 0.2,
+		getMetal(getConstant(Color{1, 1, 1}), 0.3, 0.0, 0.0),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{-1 - 0.4, 0.2, -1 + 0.2, 0}, 0.2,
+		getGlossy(getCheckerboardUV(Hex(0xffffff), Hex(0), 0.1, 0.2), 0, 1.0),
+	})
+
+	listSpheres = append(listSpheres, Sphere{
+		Tuple{0, -100000 - Epsilon, 0, 0}, 100000,
+		getLambertian(getCheckerboard(Color{0.5, 0.5, 0.5}, Color{0.2, 0.2, 0.2}, 0.5, 0.5, 0.5)),
 	})
 
 	bvh := []*BVH{}
@@ -106,7 +129,7 @@ func main() {
 	sphereBVH := getBVHSphere(listSpheres, 0, 0)
 	log.Println("Built BVHs")
 
-	world := HittableList{*sphereBVH, bvh}
+	world := HittableList{*sphereBVH, bvh, []Atmosphere{atm}}
 
 	cpus := runtime.NumCPU()
 	runtime.GOMAXPROCS(cpus)
@@ -135,9 +158,9 @@ func main() {
 
 	doneSamples := 0
 
-	// envMap := getConstant(Hex(0))
+	envMap := getConstant(Hex(0))
 	// envMap := getConstant(Hex(0xffffff))
-	envMap := getImageUV(getTexture("interior.hdr", &imageArray))
+	// envMap := getImageUV(getTexture("interior.hdr", &imageArray))
 
 	log.Printf("Rendering %d objects (%d triangles) and %d spheres at %dx%d at %d samples on %d cores\n", len(listTriangles), numTris, len(listSpheres), hsize, vsize, samples, cpus)
 
